@@ -144,6 +144,9 @@
     font-weight: 700;
   }
   .msg-error { background: var(--error-bg); color: var(--error); border: 2px solid var(--error); }
+  .msg-wait  { background: #eef4fb; color: var(--accent-dk); border: 2px solid #b9d2ee; font-weight: 400; }
+  /* 間違いではないが気づいてほしいこと。赤にすると不安を煽るので橙にする */
+  .msg-caution { background: #fdf3e7; color: #8a4014; border: 2px solid #e0a771; }
 
   .linkbtn {
     display: block;
@@ -183,6 +186,59 @@
   .summary dt { flex: 0 0 100px; font-weight: 700; color: var(--muted); margin: 0; }
   .summary dd { margin: 0; flex: 1; white-space: pre-wrap; word-break: break-word; }
 
+  /* 待機中のぐるぐる表示 */
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.45);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: -4px;
+    margin-right: 10px;
+  }
+  .spinner-dark {
+    width: 28px;
+    height: 28px;
+    border-color: #d3d9df;
+    border-top-color: var(--accent);
+    margin: 0 0 14px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 動きが苦手な方の設定を尊重する */
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 2.4s; }
+  }
+
+  /* 本日すでに報告したかどうかの表示 */
+  .today-status {
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    padding: 4px 14px;
+    margin-bottom: 22px;
+    background: #fafbfc;
+  }
+  .today-status .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    font-size: 17px;
+    border-bottom: 1px solid #e6eaee;
+  }
+  .today-status .row:last-child { border-bottom: none; }
+  .today-status .k { flex: 0 0 3.5em; font-weight: 700; }
+  .today-status .done { color: var(--start); font-weight: 700; }
+  .today-status .yet  { color: var(--muted); }
+  .today-status .mark { font-size: 19px; }
+
+  .loading-box { text-align: center; padding: 18px 0; }
+  .loading-box .lead { font-size: 19px; font-weight: 700; margin: 0 0 6px; }
+  .loading-box .sub  { font-size: 15px; color: var(--muted); margin: 0; }
+
   .pin-row { position: relative; }
   .pin-toggle {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
@@ -195,6 +251,17 @@
 <div class="wrap">
 
   <h1>始業・終業報告</h1>
+
+  <!-- ===== 画面0: 読み込み中 =====
+       ログイン状態が保存されていると、確認が終わるまで数秒かかる。
+       その間を空白にすると「壊れた」と思われるので必ず何か出す。 -->
+  <section id="screen-loading" class="panel hidden" aria-live="polite">
+    <div class="loading-box">
+      <div class="spinner spinner-dark" role="presentation"></div>
+      <p class="lead">読み込んでいます</p>
+      <p class="sub">10秒ほどかかることがあります</p>
+    </div>
+  </section>
 
   <!-- ===== 画面1: ログイン ===== -->
   <section id="screen-login" class="panel hidden" aria-labelledby="h-login">
@@ -220,6 +287,22 @@
   <section id="screen-report" class="panel hidden" aria-labelledby="h-report">
     <p id="greet" class="greet"></p>
     <p id="today" class="today"></p>
+
+    <!-- 本日すでに報告したかどうか。
+         「送れたか分からない」不安をなくすのが目的なので、
+         入力欄より先、画面を開いてすぐ目に入る位置に置く。 -->
+    <div class="today-status" id="todayStatus" aria-live="polite">
+      <div class="row">
+        <span class="k">始業</span>
+        <span class="mark" id="ts-start-mark" aria-hidden="true"></span>
+        <span id="ts-start"></span>
+      </div>
+      <div class="row">
+        <span class="k">終業</span>
+        <span class="mark" id="ts-end-mark" aria-hidden="true"></span>
+        <span id="ts-end"></span>
+      </div>
+    </div>
 
     <h2 id="h-report" class="label">区分</h2>
     <div class="kubun" role="group" aria-label="区分を選んでください">
@@ -271,9 +354,10 @@ const TOKEN_KEY = 'wing_report_token';
 
 /* --- 画面の切り替え --------------------------------------------------- */
 const screens = {
-  login:  document.getElementById('screen-login'),
-  report: document.getElementById('screen-report'),
-  done:   document.getElementById('screen-done')
+  loading: document.getElementById('screen-loading'),
+  login:   document.getElementById('screen-login'),
+  report:  document.getElementById('screen-report'),
+  done:    document.getElementById('screen-done')
 };
 function show(which) {
   Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
@@ -294,13 +378,67 @@ async function callApi(payload) {
   return await res.json();
 }
 
+/* Apps Script は、処理そのものは1秒台で終わっているのに
+ * 応答がブラウザまで届かず失敗することがある(実行ログと突き合わせて確認済み)。
+ * 同じ引換番号を送るので、やり直しても二重登録にはならない。
+ *
+ * 自動のやり直しは1回だけにしている。失敗する試行自体が30秒以上かかることが
+ * あり、回数を増やすと利用者を何分も待たせることになるため。
+ * それでも駄目なときは画面に案内を出して、本人に押し直してもらう。 */
+async function callApiRetry(payload, attempts, requiredField) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await callApi(payload);
+      // 応答が別物のことがある。実際に、POSTなのに動作確認用のdoGetの返事
+      // ({ok:true, message:...})が返ってきた。ok だけ見ると「名前が空のまま
+      // ログイン成功」と誤判定するので、期待する項目の有無まで確かめる。
+      if (requiredField && r && r.ok === true && r[requiredField] === undefined) {
+        throw new Error('unexpected response');
+      }
+      return r;
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise(s => setTimeout(s, 2000 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+/* ボタンを待機中の見た目にする。
+ * Apps Script は応答までに5〜15秒かかることがあるので、
+ * 「動いている」ことが目で分かるようにしておく。 */
+function setBusy(btn, busyLabel) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" role="presentation"></span>' + busyLabel;
+}
+function setIdle(btn, label) {
+  btn.disabled = false;
+  btn.textContent = label;
+}
+
 function showError(el, text) {
   el.textContent = text;
-  el.classList.remove('hidden');
+  el.classList.add('msg-error');
+  el.classList.remove('msg-wait', 'msg-caution', 'hidden');
+}
+// 間違いではないが気づいてほしいこと(報告済みの区分をもう一度選んだ等)
+function showCaution(el, text) {
+  el.textContent = text;
+  el.classList.add('msg-caution');
+  el.classList.remove('msg-error', 'msg-wait', 'hidden');
+}
+// 待っていることを伝えるだけの案内。赤くしないので警告に見えない。
+function showWaitNote(el) {
+  el.textContent = '送信しています。画面を閉じずにそのままお待ちください。';
+  el.classList.add('msg-wait');
+  el.classList.remove('msg-error', 'hidden');
 }
 function clearError(el) {
   el.textContent = '';
   el.classList.add('hidden');
+  el.classList.remove('msg-wait', 'msg-caution');
+  el.classList.add('msg-error');
 }
 
 /* --- 時刻の選択肢(9:30〜17:00 を15分刻み) ----------------------------- */
@@ -350,14 +488,13 @@ async function doLogin() {
     return;
   }
 
-  btn.disabled = true;
-  btn.textContent = '確認中...';
+  setBusy(btn, '確認しています…');
   try {
-    const r = await callApi({ action: 'login', userNo, pin });
+    const r = await callApiRetry({ action: 'login', userNo, pin }, 2, 'token');
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
-      enterReport(r.name);
+      enterReport(r.name, r.today);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
     } else {
@@ -367,8 +504,7 @@ async function doLogin() {
   } catch (e) {
     showError(loginMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'ログイン';
+    setIdle(btn, 'ログイン');
   }
 }
 
@@ -383,6 +519,7 @@ document.getElementById('userNo').addEventListener('keydown', e => {
 /* --- 報告画面 --------------------------------------------------------- */
 let currentName = '';
 let currentKubun = '';
+let currentToday = { start: '', end: '' };
 const reportMsg = document.getElementById('reportMsg');
 
 /* 二重登録を防ぐための引換番号。
@@ -394,8 +531,31 @@ function newReqId() {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
-function enterReport(name) {
+/* サーバーから受け取った本日の報告状況を画面に描く。
+ * { start: '9:30', end: '' } のような形。空文字なら未報告。 */
+function renderTodayStatus(today) {
+  currentToday = today || { start: '', end: '' };
+  [['start', 'ts-start'], ['end', 'ts-end']].forEach(([key, id]) => {
+    const time = currentToday[key];
+    const el   = document.getElementById(id);
+    const mark = document.getElementById(id + '-mark');
+    if (time) {
+      mark.textContent = '✓';
+      mark.className = 'mark done';
+      el.textContent = time + ' に報告済み';
+      el.className = 'done';
+    } else {
+      mark.textContent = '—';
+      mark.className = 'mark yet';
+      el.textContent = 'まだ報告していません';
+      el.className = 'yet';
+    }
+  });
+}
+
+function enterReport(name, today) {
   currentName = name;
+  renderTodayStatus(today);
   document.getElementById('greet').textContent = name + ' さん';
 
   const d = new Date();
@@ -403,12 +563,14 @@ function enterReport(name) {
   document.getElementById('today').textContent =
     `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${week}）`;
 
-  // 午前なら始業、午後なら終業を初期選択にしておく
-  setKubun(d.getHours() < 12 ? '始業' : '終業');
   selectNearestTime(timeList);
   document.getElementById('memo').value = '';
   pendingReqId = null;   // 新しい報告なので引換番号もリセット
   clearError(reportMsg);
+
+  // 午前なら始業、午後なら終業を初期選択にしておく。
+  // 報告済みの案内を出すことがあるので、clearError より後に呼ぶこと。
+  setKubun(d.getHours() < 12 ? '始業' : '終業');
   show('report');
 }
 
@@ -417,6 +579,16 @@ function setKubun(k) {
   document.querySelectorAll('.kubun button').forEach(b => {
     b.setAttribute('aria-pressed', String(b.dataset.kubun === k));
   });
+
+  // すでに報告済みの区分を選んだら知らせる。
+  // 訂正したい場合もあるので、止めはせず案内だけにする。
+  const already = (k === '始業') ? currentToday.start : currentToday.end;
+  if (already) {
+    showCaution(reportMsg, '本日の' + k + 'は ' + already + ' に報告済みです。'
+      + 'このまま送信すると、もう1件記録されます。');
+  } else {
+    clearError(reportMsg);
+  }
 }
 document.querySelectorAll('.kubun button').forEach(b => {
   b.addEventListener('click', () => setKubun(b.dataset.kubun));
@@ -433,8 +605,8 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   if (!pendingReqId) pendingReqId = newReqId();
 
-  btn.disabled = true;
-  btn.textContent = '送信中...';
+  setBusy(btn, '送信しています…');
+  showWaitNote(reportMsg);
   try {
     const payload = {
       action: 'report',
@@ -445,18 +617,13 @@ document.getElementById('btnSend').addEventListener('click', async () => {
       memo
     };
 
-    // 通信が不安定なときのために1回だけ自動で送り直す。
-    // 引換番号が同じなので、1回目が実は届いていても二重にはならない。
-    let r;
-    try {
-      r = await callApi(payload);
-    } catch (first) {
-      await new Promise(s => setTimeout(s, 3000));
-      r = await callApi(payload);
-    }
+    const r = await callApiRetry(payload, 2, 'uid');
 
     if (r.ok) {
       pendingReqId = null;
+      // サーバーが返す最新の状況を覚えておく。
+      // 「続けて報告する」で戻ったとき、いま出した分が反映されている。
+      currentToday = r.today || currentToday;
       document.getElementById('s-name').textContent  = r.name;
       document.getElementById('s-kubun').textContent = currentKubun;
       document.getElementById('s-time').textContent  = time;
@@ -471,12 +638,11 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     showError(reportMsg, '通信に失敗しました。電波の状態を確認して、もう一度「送信する」を押してください。'
       + '押し直しても報告が二重に登録されることはありません。');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '送信する';
+    setIdle(btn, '送信する');
   }
 });
 
-document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName));
+document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday));
 
 /* --- ログアウト ------------------------------------------------------- */
 function logout(message) {
@@ -497,12 +663,21 @@ const timeList = buildTimeOptions();
 (async function start() {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) { show('login'); return; }
+
+  show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
-    const r = await callApi({ action: 'me', token });
-    if (r.ok) { enterReport(r.name); return; }
-  } catch (e) { /* 通信できなければログイン画面を出す */ }
-  localStorage.removeItem(TOKEN_KEY);
-  show('login');
+    const r = await callApiRetry({ action: 'me', token }, 2, 'name');
+    if (r.ok) { enterReport(r.name, r.today); return; }
+    // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
+    localStorage.removeItem(TOKEN_KEY);
+    show('login');
+    showError(loginMsg, 'ログインの有効期限が切れました。もう一度ログインしてください。');
+  } catch (e) {
+    // 通信できなかっただけならログイン情報は消さない。
+    // 消してしまうと、電波が悪いたびに番号の入力をやり直させることになる。
+    show('login');
+    showError(loginMsg, '通信に失敗しました。電波の状態を確認して、画面を再読み込みしてください。');
+  }
 })();
 </script>
 </body>
