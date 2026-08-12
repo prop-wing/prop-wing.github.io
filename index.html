@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>始業・終業報告</title>
+<style>
+  :root {
+    --bg:        #f4f6f8;
+    --panel:     #ffffff;
+    --text:      #1a1a1a;
+    --muted:     #5a6470;
+    --line:      #c7ced6;
+    --accent:    #1565c0;
+    --accent-dk: #0d47a1;
+    --start:     #1b7f4b;
+    --start-dk:  #145c36;
+    --end:       #b4551a;
+    --end-dk:    #8a4014;
+    --error:     #b3261e;
+    --error-bg:  #fdecea;
+    --ok:        #1b7f4b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    font-size: 18px;
+    line-height: 1.7;
+  }
+
+  .wrap { max-width: 560px; margin: 0 auto; }
+
+  h1 {
+    font-size: 26px;
+    text-align: center;
+    margin: 8px 0 20px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 20px;
+  }
+
+  .hidden { display: none !important; }
+
+  label, .label {
+    display: block;
+    font-weight: 700;
+    font-size: 18px;
+    margin: 20px 0 8px;
+  }
+  .panel > *:first-child { margin-top: 0; }
+
+  .hint {
+    font-weight: 400;
+    font-size: 15px;
+    color: var(--muted);
+    margin: -4px 0 8px;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 14px;
+    font-size: 20px;
+    font-family: inherit;
+    color: var(--text);
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+
+  input:focus, select:focus, textarea:focus, button:focus {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 2px solid transparent;
+  }
+
+  .btn-main {
+    width: 100%;
+    padding: 18px;
+    margin-top: 26px;
+    color: #fff;
+    background: var(--accent);
+  }
+  .btn-main:hover  { background: var(--accent-dk); }
+  .btn-main:disabled { background: #9aa4b0; cursor: default; }
+
+  /* 始業・終業の選択ボタン */
+  .kubun { display: flex; gap: 12px; }
+  .kubun button {
+    flex: 1;
+    padding: 22px 8px;
+    font-size: 22px;
+    background: #fff;
+    border: 2px solid var(--line);
+    color: var(--muted);
+  }
+  .kubun button[aria-pressed="true"][data-kubun="始業"] {
+    background: var(--start); border-color: var(--start-dk); color: #fff;
+  }
+  .kubun button[aria-pressed="true"][data-kubun="終業"] {
+    background: var(--end); border-color: var(--end-dk); color: #fff;
+  }
+
+  .greet {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .today {
+    text-align: center;
+    color: var(--muted);
+    font-size: 16px;
+    margin-bottom: 20px;
+  }
+
+  .msg {
+    margin-top: 18px;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .msg-error { background: var(--error-bg); color: var(--error); border: 2px solid var(--error); }
+
+  .linkbtn {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: 400;
+    background: none;
+    border: none;
+    color: var(--accent);
+    text-decoration: underline;
+  }
+
+  .done-mark {
+    text-align: center;
+    font-size: 56px;
+    color: var(--ok);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .done-title {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  .summary {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px 16px;
+    background: #fafbfc;
+  }
+  .summary dl { margin: 0; }
+  .summary div { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e6eaee; }
+  .summary div:last-child { border-bottom: none; }
+  .summary dt { flex: 0 0 100px; font-weight: 700; color: var(--muted); margin: 0; }
+  .summary dd { margin: 0; flex: 1; white-space: pre-wrap; word-break: break-word; }
+
+  .pin-row { position: relative; }
+  .pin-toggle {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    padding: 8px 12px; font-size: 15px; font-weight: 400;
+    background: #eef1f4; border: 1px solid var(--line); color: var(--text);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>始業・終業報告</h1>
+
+  <!-- ===== 画面1: ログイン ===== -->
+  <section id="screen-login" class="panel hidden" aria-labelledby="h-login">
+    <h2 id="h-login" class="label" style="margin-top:0;">ログイン</h2>
+
+    <label for="userNo">利用者番号</label>
+    <p class="hint">職員からお伝えした番号を入力してください</p>
+    <input id="userNo" type="text" inputmode="numeric" autocomplete="username"
+           maxlength="10" enterkeyhint="next">
+
+    <label for="pin">暗証番号（4桁）</label>
+    <div class="pin-row">
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password"
+             maxlength="4" enterkeyhint="go">
+      <button type="button" id="pinToggle" class="pin-toggle" aria-label="暗証番号を表示">表示</button>
+    </div>
+
+    <button type="button" id="btnLogin" class="btn-main">ログイン</button>
+    <div id="loginMsg" class="msg msg-error hidden" role="alert"></div>
+  </section>
+
+  <!-- ===== 画面2: 報告の入力 ===== -->
+  <section id="screen-report" class="panel hidden" aria-labelledby="h-report">
+    <p id="greet" class="greet"></p>
+    <p id="today" class="today"></p>
+
+    <h2 id="h-report" class="label">区分</h2>
+    <div class="kubun" role="group" aria-label="区分を選んでください">
+      <button type="button" data-kubun="始業" aria-pressed="false">始業</button>
+      <button type="button" data-kubun="終業" aria-pressed="false">終業</button>
+    </div>
+
+    <label for="time">時刻</label>
+    <select id="time"></select>
+
+    <label for="memo">自由記述</label>
+    <p class="hint">今日の予定や体調など、ひとことお書きください</p>
+    <textarea id="memo" enterkeyhint="done"></textarea>
+
+    <button type="button" id="btnSend" class="btn-main">送信する</button>
+    <div id="reportMsg" class="msg msg-error hidden" role="alert"></div>
+
+    <button type="button" id="btnLogout" class="linkbtn">別の人が使う（ログアウト）</button>
+  </section>
+
+  <!-- ===== 画面3: 送信完了 ===== -->
+  <section id="screen-done" class="panel hidden" aria-labelledby="h-done">
+    <p class="done-mark" aria-hidden="true">✓</p>
+    <p id="h-done" class="done-title">送信しました</p>
+    <div class="summary">
+      <dl>
+        <div><dt>名前</dt><dd id="s-name"></dd></div>
+        <div><dt>区分</dt><dd id="s-kubun"></dd></div>
+        <div><dt>時刻</dt><dd id="s-time"></dd></div>
+        <div><dt>自由記述</dt><dd id="s-memo"></dd></div>
+      </dl>
+    </div>
+    <button type="button" id="btnAgain" class="btn-main">続けて報告する</button>
+    <button type="button" id="btnLogout2" class="linkbtn">別の人が使う（ログアウト）</button>
+  </section>
+
+</div>
+
+<script>
+/* =======================================================================
+ * 設定
+ * ---------------------------------------------------------------------
+ * API_URL には Apps Script を「ウェブアプリ」としてデプロイしたときに
+ * 表示される https://script.google.com/macros/s/......../exec を貼る。
+ * ======================================================================= */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyiTqv-ryfVZVKLH2JIn2qSJtWyTwe8l3i-8JNmDU8NoQeKUxcueg76h8MxXBMfHyAGog/exec';
+
+const TOKEN_KEY = 'wing_report_token';
+
+/* --- 画面の切り替え --------------------------------------------------- */
+const screens = {
+  login:  document.getElementById('screen-login'),
+  report: document.getElementById('screen-report'),
+  done:   document.getElementById('screen-done')
+};
+function show(which) {
+  Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
+  window.scrollTo(0, 0);
+}
+
+/* --- サーバーとのやりとり ----------------------------------------------
+ * Content-Type を text/plain にしているのは、ブラウザの事前確認通信
+ * (CORS preflight)を避けるため。Apps Script はこれに応答できないため。
+ * --------------------------------------------------------------------- */
+async function callApi(payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('http ' + res.status);
+  return await res.json();
+}
+
+function showError(el, text) {
+  el.textContent = text;
+  el.classList.remove('hidden');
+}
+function clearError(el) {
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+/* --- 時刻の選択肢(9:30〜17:00 を15分刻み) ----------------------------- */
+function buildTimeOptions() {
+  const sel = document.getElementById('time');
+  const list = [];
+  for (let m = 9 * 60 + 30; m <= 17 * 60; m += 15) {
+    list.push(Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2));
+  }
+  sel.innerHTML = list.map(t => `<option value="${t}">${t}</option>`).join('');
+  return list;
+}
+
+// いまの時刻に一番近い選択肢を初期値にする
+function selectNearestTime(list) {
+  const now = new Date();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  let best = list[0], diff = Infinity;
+  list.forEach(t => {
+    const [h, m] = t.split(':').map(Number);
+    const d = Math.abs(h * 60 + m - cur);
+    if (d < diff) { diff = d; best = t; }
+  });
+  document.getElementById('time').value = best;
+}
+
+/* --- ログイン --------------------------------------------------------- */
+const loginMsg = document.getElementById('loginMsg');
+
+document.getElementById('pinToggle').addEventListener('click', () => {
+  const pin = document.getElementById('pin');
+  const btn = document.getElementById('pinToggle');
+  const showing = pin.type === 'text';
+  pin.type = showing ? 'password' : 'text';
+  btn.textContent = showing ? '表示' : '隠す';
+  btn.setAttribute('aria-label', showing ? '暗証番号を表示' : '暗証番号を隠す');
+});
+
+async function doLogin() {
+  const btn    = document.getElementById('btnLogin');
+  const userNo = document.getElementById('userNo').value.trim();
+  const pin    = document.getElementById('pin').value.trim();
+  clearError(loginMsg);
+
+  if (!userNo || !pin) {
+    showError(loginMsg, '利用者番号と暗証番号を入力してください。');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '確認中...';
+  try {
+    const r = await callApi({ action: 'login', userNo, pin });
+    if (r.ok) {
+      localStorage.setItem(TOKEN_KEY, r.token);
+      document.getElementById('pin').value = '';
+      enterReport(r.name);
+    } else if (r.error === 'locked') {
+      showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
+    } else {
+      showError(loginMsg, '利用者番号または暗証番号が違います。' +
+        (typeof r.rest === 'number' ? `（あと${r.rest}回まで）` : ''));
+    }
+  } catch (e) {
+    showError(loginMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ログイン';
+  }
+}
+
+document.getElementById('btnLogin').addEventListener('click', doLogin);
+document.getElementById('pin').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('userNo').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('pin').focus();
+});
+
+/* --- 報告画面 --------------------------------------------------------- */
+let currentName = '';
+let currentKubun = '';
+const reportMsg = document.getElementById('reportMsg');
+
+/* 二重登録を防ぐための引換番号。
+ * 「通信に失敗しました」と出ても、実はサーバー側では受け付けられている
+ * ことがある。そのまま押し直すと報告が2件になってしまうので、
+ * 同じ送信のやり直しには同じ番号を送り、成功したら捨てる。 */
+let pendingReqId = null;
+function newReqId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function enterReport(name) {
+  currentName = name;
+  document.getElementById('greet').textContent = name + ' さん';
+
+  const d = new Date();
+  const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+  document.getElementById('today').textContent =
+    `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${week}）`;
+
+  // 午前なら始業、午後なら終業を初期選択にしておく
+  setKubun(d.getHours() < 12 ? '始業' : '終業');
+  selectNearestTime(timeList);
+  document.getElementById('memo').value = '';
+  pendingReqId = null;   // 新しい報告なので引換番号もリセット
+  clearError(reportMsg);
+  show('report');
+}
+
+function setKubun(k) {
+  currentKubun = k;
+  document.querySelectorAll('.kubun button').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.kubun === k));
+  });
+}
+document.querySelectorAll('.kubun button').forEach(b => {
+  b.addEventListener('click', () => setKubun(b.dataset.kubun));
+});
+
+document.getElementById('btnSend').addEventListener('click', async () => {
+  const btn  = document.getElementById('btnSend');
+  const time = document.getElementById('time').value;
+  const memo = document.getElementById('memo').value.trim();
+  clearError(reportMsg);
+
+  if (!currentKubun) { showError(reportMsg, '「始業」か「終業」を選んでください。'); return; }
+  if (!memo)         { showError(reportMsg, '自由記述を入力してください。'); document.getElementById('memo').focus(); return; }
+
+  if (!pendingReqId) pendingReqId = newReqId();
+
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+  try {
+    const payload = {
+      action: 'report',
+      token: localStorage.getItem(TOKEN_KEY),
+      reqId: pendingReqId,
+      kubun: currentKubun,
+      time,
+      memo
+    };
+
+    // 通信が不安定なときのために1回だけ自動で送り直す。
+    // 引換番号が同じなので、1回目が実は届いていても二重にはならない。
+    let r;
+    try {
+      r = await callApi(payload);
+    } catch (first) {
+      await new Promise(s => setTimeout(s, 3000));
+      r = await callApi(payload);
+    }
+
+    if (r.ok) {
+      pendingReqId = null;
+      document.getElementById('s-name').textContent  = r.name;
+      document.getElementById('s-kubun').textContent = currentKubun;
+      document.getElementById('s-time').textContent  = time;
+      document.getElementById('s-memo').textContent  = memo;
+      show('done');
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      showError(reportMsg, '送信できませんでした。入力内容を確認して、もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(reportMsg, '通信に失敗しました。電波の状態を確認して、もう一度「送信する」を押してください。'
+      + '押し直しても報告が二重に登録されることはありません。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '送信する';
+  }
+});
+
+document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName));
+
+/* --- ログアウト ------------------------------------------------------- */
+function logout(message) {
+  localStorage.removeItem(TOKEN_KEY);
+  currentName = '';
+  document.getElementById('userNo').value = '';
+  document.getElementById('pin').value = '';
+  clearError(loginMsg);
+  if (message) showError(loginMsg, message);
+  show('login');
+}
+document.getElementById('btnLogout').addEventListener('click', () => logout());
+document.getElementById('btnLogout2').addEventListener('click', () => logout());
+
+/* --- 起動時: 保存済みのログイン状態があれば自動で報告画面へ ------------- */
+const timeList = buildTimeOptions();
+
+(async function start() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) { show('login'); return; }
+  try {
+    const r = await callApi({ action: 'me', token });
+    if (r.ok) { enterReport(r.name); return; }
+  } catch (e) { /* 通信できなければログイン画面を出す */ }
+  localStorage.removeItem(TOKEN_KEY);
+  show('login');
+})();
+</script>
+</body>
+</html>
