@@ -239,6 +239,38 @@
   .loading-box .lead { font-size: 19px; font-weight: 700; margin: 0 0 6px; }
   .loading-box .sub  { font-size: 15px; color: var(--muted); margin: 0; }
 
+  /* 体調の選択(3つのボタン)。プルダウンより押しやすいのでボタンにしている */
+  .choice { display: flex; gap: 10px; }
+  .choice button {
+    flex: 1;
+    padding: 16px 4px;
+    font-size: 18px;
+    background: #fff;
+    border: 2px solid var(--line);
+    color: var(--muted);
+  }
+  .choice button[aria-pressed="true"] {
+    background: var(--accent); border-color: var(--accent-dk); color: #fff;
+  }
+
+  /* 訓練・作業内容の候補。本人が前に書いた内容を押すだけで入れられる */
+  .suggest { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .suggest button {
+    padding: 9px 14px;
+    font-size: 15px;
+    font-weight: 400;
+    text-align: left;
+    background: #eef4fb;
+    border: 1px solid #b9d2ee;
+    color: var(--accent-dk);
+  }
+  .suggest button:hover { background: #dfeaf7; }
+  .suggest-label {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 14px 0 0;
+  }
+
   .pin-row { position: relative; }
   .pin-toggle {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
@@ -313,9 +345,37 @@
     <label for="time">時刻</label>
     <select id="time"></select>
 
-    <label for="memo">自由記述</label>
-    <p class="hint">今日の予定や体調など、ひとことお書きください</p>
-    <textarea id="memo" enterkeyhint="done"></textarea>
+    <!-- ===== 始業のときだけ出る ===== -->
+    <div id="sec-start" class="hidden">
+      <p class="label" id="lbl-taicho">体調</p>
+      <div class="choice" role="group" aria-labelledby="lbl-taicho">
+        <button type="button" data-taicho="良好"   aria-pressed="false">良好</button>
+        <button type="button" data-taicho="やや不良" aria-pressed="false">やや不良</button>
+        <button type="button" data-taicho="不良"   aria-pressed="false">不良</button>
+      </div>
+    </div>
+
+    <!-- ===== 終業のときだけ出る ===== -->
+    <div id="sec-end" class="hidden">
+      <label for="kyukei">昼等休憩</label>
+      <p class="hint">お昼などで休んだ時間の合計を選んでください</p>
+      <select id="kyukei"></select>
+
+      <label for="sagyo">訓練・作業内容</label>
+      <p class="hint">今日おこなった内容を書いてください（簡単で結構です）</p>
+      <textarea id="sagyo" style="min-height:80px" enterkeyhint="done"></textarea>
+      <p class="suggest-label hidden" id="sagyoSuggestLabel">前に書いた内容（押すと入ります）</p>
+      <div class="suggest" id="sagyoSuggest"></div>
+
+      <label for="biko">備考</label>
+      <p class="hint">作業に関して気づいたことや、他のサービスを使った時間など。<br>
+        例：14:45〜15:45 ヘルパー入浴 / 13:30〜14:30 訪問リハビリ</p>
+      <textarea id="biko" style="min-height:80px" enterkeyhint="done"></textarea>
+    </div>
+
+    <label for="memo">自由記述（任意）</label>
+    <p class="hint">挨拶や、業務と関係のない話などをどうぞ。書かなくても送れます</p>
+    <textarea id="memo" style="min-height:90px" enterkeyhint="done"></textarea>
 
     <button type="button" id="btnSend" class="btn-main">送信する</button>
     <div id="reportMsg" class="msg msg-error hidden" role="alert"></div>
@@ -327,13 +387,9 @@
   <section id="screen-done" class="panel hidden" aria-labelledby="h-done">
     <p class="done-mark" aria-hidden="true">✓</p>
     <p id="h-done" class="done-title">送信しました</p>
+    <!-- 送った項目だけを並べる。中身は送信時に組み立てる -->
     <div class="summary">
-      <dl>
-        <div><dt>名前</dt><dd id="s-name"></dd></div>
-        <div><dt>区分</dt><dd id="s-kubun"></dd></div>
-        <div><dt>時刻</dt><dd id="s-time"></dd></div>
-        <div><dt>自由記述</dt><dd id="s-memo"></dd></div>
-      </dl>
+      <dl id="s-list"></dl>
     </div>
     <button type="button" id="btnAgain" class="btn-main">続けて報告する</button>
     <button type="button" id="btnLogout2" class="linkbtn">別の人が使う（ログアウト）</button>
@@ -452,6 +508,21 @@ function buildTimeOptions() {
   return list;
 }
 
+/* --- 昼等休憩の選択肢 --------------------------------------------------
+ * 実際の日報では 0:00 / 0:45 / 1:00 / 2:00 の4つしか使われていなかったが、
+ * 例外の日もあるので15分刻みで用意する。
+ * 初期値は空にしてある。うっかり違う時間のまま送られると、
+ * 日報の「時間数」がそのまま狂ってしまうため。 */
+function buildKyukeiOptions() {
+  const sel  = document.getElementById('kyukei');
+  const list = [];
+  for (let m = 0; m <= 120; m += 15) {
+    list.push(Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2));
+  }
+  sel.innerHTML = '<option value="">選んでください</option>'
+    + list.map(t => `<option value="${t}">${t}</option>`).join('');
+}
+
 // いまの時刻に一番近い選択肢を初期値にする
 function selectNearestTime(list) {
   const now = new Date();
@@ -494,7 +565,7 @@ async function doLogin() {
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
-      enterReport(r.name, r.today);
+      enterReport(r.name, r.today, r.sagyoList);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
     } else {
@@ -519,6 +590,7 @@ document.getElementById('userNo').addEventListener('keydown', e => {
 /* --- 報告画面 --------------------------------------------------------- */
 let currentName = '';
 let currentKubun = '';
+let currentTaicho = '';
 let currentToday = { start: '', end: '' };
 const reportMsg = document.getElementById('reportMsg');
 
@@ -553,9 +625,32 @@ function renderTodayStatus(today) {
   });
 }
 
-function enterReport(name, today) {
+/* 本人が前に書いた訓練・作業内容をボタンで並べる。
+ * ★ここに出るのは必ず本人の入力だけ(サーバー側で名前で絞っている)。
+ *   他の利用者の入力を混ぜてはいけない。 */
+function renderSagyoSuggest(list) {
+  const box   = document.getElementById('sagyoSuggest');
+  const label = document.getElementById('sagyoSuggestLabel');
+  box.innerHTML = '';
+  const items = Array.isArray(list) ? list : [];
+  label.classList.toggle('hidden', items.length === 0);
+
+  items.forEach(text => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.addEventListener('click', () => {
+      document.getElementById('sagyo').value = text;
+      document.getElementById('sagyo').focus();
+    });
+    box.appendChild(b);
+  });
+}
+
+function enterReport(name, today, sagyoList) {
   currentName = name;
   renderTodayStatus(today);
+  if (sagyoList !== undefined) renderSagyoSuggest(sagyoList);
   document.getElementById('greet').textContent = name + ' さん';
 
   const d = new Date();
@@ -564,7 +659,11 @@ function enterReport(name, today) {
     `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${week}）`;
 
   selectNearestTime(timeList);
-  document.getElementById('memo').value = '';
+  document.getElementById('memo').value   = '';
+  document.getElementById('sagyo').value  = '';
+  document.getElementById('biko').value   = '';
+  document.getElementById('kyukei').value = '';
+  setTaicho('');
   pendingReqId = null;   // 新しい報告なので引換番号もリセット
   clearError(reportMsg);
 
@@ -574,11 +673,26 @@ function enterReport(name, today) {
   show('report');
 }
 
+function setTaicho(t) {
+  currentTaicho = t;
+  document.querySelectorAll('.choice button').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.taicho === t));
+  });
+}
+document.querySelectorAll('.choice button').forEach(b => {
+  b.addEventListener('click', () => setTaicho(b.dataset.taicho));
+});
+
 function setKubun(k) {
   currentKubun = k;
   document.querySelectorAll('.kubun button').forEach(b => {
     b.setAttribute('aria-pressed', String(b.dataset.kubun === k));
   });
+
+  /* 日報の項目は始業と終業で書くものが違う。
+   * 関係のない欄を出しておくと迷わせるので、まるごと出し分ける。 */
+  document.getElementById('sec-start').classList.toggle('hidden', k !== '始業');
+  document.getElementById('sec-end').classList.toggle('hidden', k !== '終業');
 
   // すでに報告済みの区分を選んだら知らせる。
   // 訂正したい場合もあるので、止めはせず案内だけにする。
@@ -594,14 +708,53 @@ document.querySelectorAll('.kubun button').forEach(b => {
   b.addEventListener('click', () => setKubun(b.dataset.kubun));
 });
 
+/* 送信完了画面に、実際に送った項目だけを並べる */
+function renderSummary(rows) {
+  const dl = document.getElementById('s-list');
+  dl.innerHTML = '';
+  rows.forEach(([k, v]) => {
+    if (!v) return;
+    const div = document.createElement('div');
+    const dt  = document.createElement('dt');
+    const dd  = document.createElement('dd');
+    dt.textContent = k;
+    dd.textContent = v;
+    div.appendChild(dt);
+    div.appendChild(dd);
+    dl.appendChild(div);
+  });
+}
+
 document.getElementById('btnSend').addEventListener('click', async () => {
-  const btn  = document.getElementById('btnSend');
-  const time = document.getElementById('time').value;
-  const memo = document.getElementById('memo').value.trim();
+  const btn    = document.getElementById('btnSend');
+  const time   = document.getElementById('time').value;
+  const memo   = document.getElementById('memo').value.trim();
+  const kyukei = document.getElementById('kyukei').value;
+  const sagyo  = document.getElementById('sagyo').value.trim();
+  const biko   = document.getElementById('biko').value.trim();
+  const taicho = currentTaicho;
   clearError(reportMsg);
 
-  if (!currentKubun) { showError(reportMsg, '「始業」か「終業」を選んでください。'); return; }
-  if (!memo)         { showError(reportMsg, '自由記述を入力してください。'); document.getElementById('memo').focus(); return; }
+  // 足りない項目があれば、その欄まで案内する
+  if (!currentKubun) {
+    showError(reportMsg, '「始業」か「終業」を選んでください。');
+    return;
+  }
+  if (currentKubun === '始業' && !taicho) {
+    showError(reportMsg, '体調を選んでください。');
+    document.getElementById('sec-start').scrollIntoView({ block: 'center' });
+    return;
+  }
+  if (currentKubun === '終業' && !kyukei) {
+    showError(reportMsg, '昼等休憩の時間を選んでください。休んでいない場合は 0:00 を選んでください。');
+    document.getElementById('kyukei').focus();
+    return;
+  }
+  if (currentKubun === '終業' && !sagyo) {
+    showError(reportMsg, '訓練・作業内容を入力してください。');
+    document.getElementById('sagyo').focus();
+    return;
+  }
 
   if (!pendingReqId) pendingReqId = newReqId();
 
@@ -614,7 +767,11 @@ document.getElementById('btnSend').addEventListener('click', async () => {
       reqId: pendingReqId,
       kubun: currentKubun,
       time,
-      memo
+      memo,
+      taicho,
+      kyukei,
+      sagyo,
+      biko
     };
 
     const r = await callApiRetry(payload, 2, 'uid');
@@ -624,10 +781,17 @@ document.getElementById('btnSend').addEventListener('click', async () => {
       // サーバーが返す最新の状況を覚えておく。
       // 「続けて報告する」で戻ったとき、いま出した分が反映されている。
       currentToday = r.today || currentToday;
-      document.getElementById('s-name').textContent  = r.name;
-      document.getElementById('s-kubun').textContent = currentKubun;
-      document.getElementById('s-time').textContent  = time;
-      document.getElementById('s-memo').textContent  = memo;
+      if (r.sagyoList) renderSagyoSuggest(r.sagyoList);
+      renderSummary([
+        ['名前', r.name],
+        ['区分', currentKubun],
+        ['時刻', time],
+        ['体調', taicho],
+        ['昼等休憩', kyukei],
+        ['訓練・作業内容', sagyo],
+        ['備考', biko],
+        ['自由記述', memo]
+      ]);
       show('done');
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
@@ -659,6 +823,7 @@ document.getElementById('btnLogout2').addEventListener('click', () => logout());
 
 /* --- 起動時: 保存済みのログイン状態があれば自動で報告画面へ ------------- */
 const timeList = buildTimeOptions();
+buildKyukeiOptions();
 
 (async function start() {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -667,7 +832,7 @@ const timeList = buildTimeOptions();
   show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
     const r = await callApiRetry({ action: 'me', token }, 2, 'name');
-    if (r.ok) { enterReport(r.name, r.today); return; }
+    if (r.ok) { enterReport(r.name, r.today, r.sagyoList); return; }
     // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');
