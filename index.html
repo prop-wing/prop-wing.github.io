@@ -271,6 +271,71 @@
     margin: 14px 0 0;
   }
 
+  /* いつもの予定（曜日ごとの定型の備考） */
+  .routines { margin: 4px 0 0; }
+  .routines label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0 0 8px;
+    padding: 13px 14px;
+    font-weight: 400;
+    font-size: 17px;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .routines label:has(input:checked) {
+    background: #eef4fb;
+    border-color: var(--accent);
+  }
+  .routines input[type="checkbox"] {
+    width: 24px; height: 24px;
+    margin: 1px 0 0;
+    flex: 0 0 auto;
+    accent-color: var(--accent);
+  }
+
+  /* 送信前に、備考として何が記録されるかを見せる */
+  .preview {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #fafbfc;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+  }
+  .preview-title { font-size: 14px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  .preview-body { font-size: 16px; white-space: pre-wrap; word-break: break-word; }
+  .preview-body.empty { color: var(--muted); }
+
+  /* いつもの予定の登録画面 */
+  .rtrow {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .rtrow select { flex: 0 0 5.5em; padding: 12px 6px; }
+  .rtrow input  { flex: 1; }
+  .rtrow button {
+    flex: 0 0 auto;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 400;
+    background: #fff;
+    border: 2px solid var(--line);
+    color: var(--muted);
+  }
+  .btn-add {
+    width: 100%;
+    padding: 13px;
+    font-size: 16px;
+    background: #fff;
+    border: 2px dashed var(--line);
+    color: var(--accent-dk);
+  }
+
   /* 職員からの返信 */
   .reply {
     margin: 8px 0 2px;
@@ -413,10 +478,25 @@
       <p class="suggest-label hidden" id="sagyoSuggestLabel">前に書いた内容（押すと入ります）</p>
       <div class="suggest" id="sagyoSuggest"></div>
 
+      <!-- いつもの予定。登録があるときだけ、その曜日の分が出る -->
+      <div id="routineWrap" class="hidden">
+        <p class="label" id="lbl-routine">いつもの予定（<span id="routineDay"></span>曜日）</p>
+        <p class="hint">その日に無かったものは、チェックを外してください</p>
+        <div class="routines" id="routineList" role="group" aria-labelledby="lbl-routine"></div>
+      </div>
+
       <label for="biko">備考</label>
       <p class="hint">作業に関して気づいたことや、他のサービスを使った時間など。<br>
-        例：14:45〜15:45 ヘルパー入浴 / 13:30〜14:30 訪問リハビリ</p>
+        例：13:00〜13:30 担当者会議</p>
       <textarea id="biko" style="min-height:80px" enterkeyhint="done"></textarea>
+
+      <!-- 備考として実際に何が記録されるかを、送信する前に見せる -->
+      <div class="preview" id="bikoPreview" aria-live="polite">
+        <div class="preview-title">本日の備考として記録されます</div>
+        <div class="preview-body" id="bikoPreviewBody"></div>
+      </div>
+
+      <button type="button" id="btnRoutineEdit" class="linkbtn">いつもの予定を登録・変更する</button>
     </div>
 
     <label for="memo">自由記述（任意）</label>
@@ -428,6 +508,17 @@
 
     <button type="button" id="btnHistory" class="linkbtn">これまでの報告を見る</button>
     <button type="button" id="btnLogout" class="linkbtn">別の人が使う（ログアウト）</button>
+  </section>
+
+  <!-- ===== 画面5: いつもの予定の登録 ===== -->
+  <section id="screen-routine" class="panel hidden" aria-labelledby="h-routine">
+    <p id="h-routine" class="done-title" style="margin-bottom:4px;">いつもの予定</p>
+    <p class="hint" style="text-align:center;">毎週きまっている予定を登録しておくと、<br>その曜日の終業報告に最初から出てきます</p>
+    <div id="routineEditList"></div>
+    <button type="button" id="btnRoutineAdd" class="btn-add">＋ 予定を足す</button>
+    <div id="routineMsg" class="msg msg-error hidden" role="alert"></div>
+    <button type="button" id="btnRoutineSave" class="btn-main">保存する</button>
+    <button type="button" id="btnRoutineBack" class="linkbtn">保存せずにもどる</button>
   </section>
 
   <!-- ===== 画面4: これまでの報告 ===== -->
@@ -470,8 +561,11 @@ const screens = {
   login:   document.getElementById('screen-login'),
   report:  document.getElementById('screen-report'),
   done:    document.getElementById('screen-done'),
-  history: document.getElementById('screen-history')
+  history: document.getElementById('screen-history'),
+  routine: document.getElementById('screen-routine')
 };
+
+const WEEK_JP = ['日', '月', '火', '水', '木', '金', '土'];
 function show(which) {
   Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
   window.scrollTo(0, 0);
@@ -634,7 +728,7 @@ async function doLogin() {
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
-      enterReport(r.name, r.today, r.sagyoList);
+      enterReport(r.name, r.today, r.sagyoList, r.routines);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
     } else {
@@ -737,10 +831,69 @@ function renderSagyoSuggest(list) {
   });
 }
 
-function enterReport(name, today, sagyoList) {
+/* --- いつもの予定 -----------------------------------------------------
+ * 曜日ごとに決まっている備考(訪問リハビリ・ヘルパー入浴など)を
+ * その曜日の終業報告に、最初からチェック済みで出す。
+ *
+ * ★チェックを外した分は記録しない。
+ *   受けていないサービスが記録に残るほうが、あとで困るため。
+ *   外し忘れを防ぐために、下の「本日の備考として記録されます」で
+ *   実際に保存される文章をそのまま見せている。
+ * --------------------------------------------------------------------- */
+let currentRoutines = [];      // 本人の全曜日ぶん
+
+function todayRoutines() {
+  const w = WEEK_JP[new Date().getDay()];
+  return currentRoutines.filter(r => r.day === w);
+}
+
+function renderRoutineChecks() {
+  const wrap = document.getElementById('routineWrap');
+  const list = document.getElementById('routineList');
+  const mine = todayRoutines();
+
+  document.getElementById('routineDay').textContent = WEEK_JP[new Date().getDay()];
+  list.innerHTML = '';
+  wrap.classList.toggle('hidden', mine.length === 0);
+
+  mine.forEach((r, i) => {
+    const lab = document.createElement('label');
+    const cb  = document.createElement('input');
+    const sp  = document.createElement('span');
+    cb.type = 'checkbox';
+    cb.checked = true;            // いつも通りの日は何もしなくてよいように
+    cb.dataset.text = r.text;
+    cb.id = 'rt-' + i;
+    sp.textContent = r.text;
+    cb.addEventListener('change', updateBikoPreview);
+    lab.appendChild(cb);
+    lab.appendChild(sp);
+    list.appendChild(lab);
+  });
+}
+
+/* 実際に備考として保存する文章を組み立てる。
+ * チェックの入っている予定 → 自分で書いた備考、の順に改行でつなぐ。 */
+function composeBiko() {
+  const picked = Array.from(document.querySelectorAll('#routineList input:checked'))
+    .map(cb => cb.dataset.text);
+  const free = document.getElementById('biko').value.trim();
+  if (free) picked.push(free);
+  return picked.join('\n');
+}
+
+function updateBikoPreview() {
+  const body = document.getElementById('bikoPreviewBody');
+  const text = composeBiko();
+  body.textContent = text || '（記入なし）';
+  body.classList.toggle('empty', !text);
+}
+
+function enterReport(name, today, sagyoList, routines) {
   currentName = name;
   renderTodayStatus(today);
   if (sagyoList !== undefined) renderSagyoSuggest(sagyoList);
+  if (routines  !== undefined) currentRoutines = routines || [];
   document.getElementById('greet').textContent = name + ' さん';
 
   const d = new Date();
@@ -754,6 +907,8 @@ function enterReport(name, today, sagyoList) {
   document.getElementById('biko').value   = '';
   document.getElementById('kyukei').value = '';
   setTaicho('');
+  renderRoutineChecks();
+  updateBikoPreview();
   pendingReqId = null;   // 新しい報告なので引換番号もリセット
   clearError(reportMsg);
 
@@ -824,6 +979,7 @@ function finishSent(r, f) {
   // 「続けて報告する」で戻ったとき、いま出した分が反映されている。
   currentToday = r.today || currentToday;
   if (r.sagyoList) renderSagyoSuggest(r.sagyoList);
+  if (r.routines)  currentRoutines = r.routines;
   renderSummary([
     ['名前', r.name || currentName],
     ['区分', f.kubun],
@@ -868,7 +1024,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   const memo   = document.getElementById('memo').value.trim();
   const kyukei = document.getElementById('kyukei').value;
   const sagyo  = document.getElementById('sagyo').value.trim();
-  const biko   = document.getElementById('biko').value.trim();
+  const biko   = composeBiko();   // チェックした「いつもの予定」＋自分で書いた分
   const taicho = currentTaicho;
   clearError(reportMsg);
 
@@ -933,6 +1089,100 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 });
 
 document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday));
+
+document.getElementById('biko').addEventListener('input', updateBikoPreview);
+
+/* --- いつもの予定の登録画面 -------------------------------------------- */
+const routineMsg = document.getElementById('routineMsg');
+
+function routineRow(day, text) {
+  const row = document.createElement('div');
+  const sel = document.createElement('select');
+  const inp = document.createElement('input');
+  const del = document.createElement('button');
+  row.className = 'rtrow';
+
+  WEEK_JP.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d;
+    o.textContent = d + '曜';
+    sel.appendChild(o);
+  });
+  sel.value = day || WEEK_JP[new Date().getDay()];
+  sel.setAttribute('aria-label', '曜日');
+
+  inp.type = 'text';
+  inp.value = text || '';
+  inp.placeholder = '例：14:45〜15:45 ヘルパー入浴';
+  inp.setAttribute('aria-label', '予定の内容');
+
+  del.type = 'button';
+  del.textContent = '削除';
+  del.setAttribute('aria-label', 'この予定を削除');
+  del.addEventListener('click', () => row.remove());
+
+  row.appendChild(sel);
+  row.appendChild(inp);
+  row.appendChild(del);
+  return row;
+}
+
+function renderRoutineEditor() {
+  const box = document.getElementById('routineEditList');
+  box.innerHTML = '';
+  currentRoutines.forEach(r => box.appendChild(routineRow(r.day, r.text)));
+  if (!currentRoutines.length) box.appendChild(routineRow('', ''));
+}
+
+document.getElementById('btnRoutineEdit').addEventListener('click', () => {
+  clearError(routineMsg);
+  renderRoutineEditor();
+  show('routine');
+});
+
+document.getElementById('btnRoutineAdd').addEventListener('click', () => {
+  document.getElementById('routineEditList').appendChild(routineRow('', ''));
+});
+
+document.getElementById('btnRoutineBack').addEventListener('click', () => show('report'));
+
+document.getElementById('btnRoutineSave').addEventListener('click', async () => {
+  const btn = document.getElementById('btnRoutineSave');
+  clearError(routineMsg);
+
+  const routines = Array.from(document.querySelectorAll('#routineEditList .rtrow'))
+    .map(row => ({
+      day:  row.querySelector('select').value,
+      text: row.querySelector('input').value.trim()
+    }))
+    .filter(r => r.text);          // 空の行は登録しない
+
+  setBusy(btn, '保存しています…');
+  try {
+    const r = await callApiRetry({
+      action: 'routineSave',
+      token: localStorage.getItem(TOKEN_KEY),
+      routines
+    }, 2, 'routines');
+
+    if (r.ok) {
+      currentRoutines = r.routines || [];
+      renderRoutineChecks();
+      updateBikoPreview();
+      show('report');
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else if (r.error === 'too_many') {
+      showError(routineMsg, '登録できるのは20件までです。');
+    } else {
+      showError(routineMsg, '保存できませんでした。入力内容を確認して、もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(routineMsg, '通信に失敗しました。電波の状態を確認して、もう一度「保存する」を押してください。');
+  } finally {
+    setIdle(btn, '保存する');
+  }
+});
 
 /* --- これまでの報告 ---------------------------------------------------
  * 見るだけの画面。ここから報告を出したり直したりはできない。
@@ -1062,7 +1312,7 @@ buildKyukeiOptions();
   show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
     const r = await callApiRetry({ action: 'me', token }, 2, 'name');
-    if (r.ok) { enterReport(r.name, r.today, r.sagyoList); return; }
+    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines); return; }
     // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');
