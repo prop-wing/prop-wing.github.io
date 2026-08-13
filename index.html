@@ -271,6 +271,49 @@
     margin: 14px 0 0;
   }
 
+  /* 職員からの返信 */
+  .reply {
+    margin: 8px 0 2px;
+    padding: 10px 12px;
+    background: #eef4fb;
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+  }
+  .reply-head {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-dk);
+    margin-bottom: 3px;
+  }
+  .reply-body { font-size: 16px; white-space: pre-wrap; word-break: break-word; }
+
+  /* これまでの報告 */
+  .histday {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    background: #fafbfc;
+  }
+  .histday h3 { margin: 0 0 10px; font-size: 19px; }
+  .histblk { margin-bottom: 14px; }
+  .histblk:last-child { margin-bottom: 0; }
+  .histblk .kind {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .histblk .kind.start { background: var(--start); }
+  .histblk .kind.end   { background: var(--end); }
+  .histblk .item { display: flex; gap: 10px; padding: 4px 0; font-size: 16px; }
+  .histblk .item dt { flex: 0 0 6.5em; font-weight: 700; color: var(--muted); margin: 0; }
+  .histblk .item dd { flex: 1; margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .histnone { font-size: 15px; color: var(--muted); }
+
   .pin-row { position: relative; }
   .pin-toggle {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
@@ -329,11 +372,14 @@
         <span class="mark" id="ts-start-mark" aria-hidden="true"></span>
         <span id="ts-start"></span>
       </div>
+      <!-- 職員からの返信。届いていなければ何も出ない -->
+      <div id="ts-start-replies"></div>
       <div class="row">
         <span class="k">終業</span>
         <span class="mark" id="ts-end-mark" aria-hidden="true"></span>
         <span id="ts-end"></span>
       </div>
+      <div id="ts-end-replies"></div>
     </div>
 
     <h2 id="h-report" class="label">区分</h2>
@@ -380,7 +426,17 @@
     <button type="button" id="btnSend" class="btn-main">送信する</button>
     <div id="reportMsg" class="msg msg-error hidden" role="alert"></div>
 
+    <button type="button" id="btnHistory" class="linkbtn">これまでの報告を見る</button>
     <button type="button" id="btnLogout" class="linkbtn">別の人が使う（ログアウト）</button>
+  </section>
+
+  <!-- ===== 画面4: これまでの報告 ===== -->
+  <section id="screen-history" class="panel hidden" aria-labelledby="h-history">
+    <p id="h-history" class="done-title" style="margin-bottom:4px;">これまでの報告</p>
+    <p class="hint" style="text-align:center;">新しい日から順に表示しています</p>
+    <div id="historyBody"></div>
+    <div id="historyMsg" class="msg msg-error hidden" role="alert"></div>
+    <button type="button" id="btnHistoryBack" class="btn-main">報告の画面にもどる</button>
   </section>
 
   <!-- ===== 画面3: 送信完了 ===== -->
@@ -413,7 +469,8 @@ const screens = {
   loading: document.getElementById('screen-loading'),
   login:   document.getElementById('screen-login'),
   report:  document.getElementById('screen-report'),
-  done:    document.getElementById('screen-done')
+  done:    document.getElementById('screen-done'),
+  history: document.getElementById('screen-history')
 };
 function show(which) {
   Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
@@ -617,6 +674,26 @@ function newReqId() {
 
 /* サーバーから受け取った本日の報告状況を画面に描く。
  * { start: '9:30', end: '' } のような形。空文字なら未報告。 */
+/* 職員からの返信を並べる。届いていなければ何も出さない。 */
+function renderReplies(el, replies) {
+  el.innerHTML = '';
+  if (!replies || !replies.length) return;
+
+  replies.forEach(r => {
+    const box  = document.createElement('div');
+    const head = document.createElement('div');
+    const body = document.createElement('div');
+    box.className  = 'reply';
+    head.className = 'reply-head';
+    body.className = 'reply-body';
+    head.textContent = (r.who || '職員') + ' より' + (r.at ? '（' + r.at + '）' : '');
+    body.textContent = r.text || '';
+    box.appendChild(head);
+    box.appendChild(body);
+    el.appendChild(box);
+  });
+}
+
 function renderTodayStatus(today) {
   currentToday = today || { start: '', end: '' };
   [['start', 'ts-start'], ['end', 'ts-end']].forEach(([key, id]) => {
@@ -634,6 +711,7 @@ function renderTodayStatus(today) {
       el.textContent = 'まだ報告していません';
       el.className = 'yet';
     }
+    renderReplies(document.getElementById(id + '-replies'), currentToday[key + 'Replies']);
   });
 }
 
@@ -855,6 +933,110 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 });
 
 document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday));
+
+/* --- これまでの報告 ---------------------------------------------------
+ * 見るだけの画面。ここから報告を出したり直したりはできない。
+ * --------------------------------------------------------------------- */
+const historyMsg = document.getElementById('historyMsg');
+
+function histBlock(kindLabel, cls, data, fields) {
+  const blk  = document.createElement('div');
+  const kind = document.createElement('span');
+  blk.className  = 'histblk';
+  kind.className = 'kind ' + cls;
+  kind.textContent = kindLabel;
+  blk.appendChild(kind);
+
+  if (!data) {
+    const p = document.createElement('div');
+    p.className = 'histnone';
+    p.textContent = '報告はありません';
+    blk.appendChild(p);
+    return blk;
+  }
+
+  const dl = document.createElement('dl');
+  dl.style.margin = '0';
+  fields.forEach(([label, key]) => {
+    if (!data[key]) return;
+    const row = document.createElement('div');
+    const dt  = document.createElement('dt');
+    const dd  = document.createElement('dd');
+    row.className = 'item';
+    dt.textContent = label;
+    dd.textContent = data[key];
+    row.appendChild(dt);
+    row.appendChild(dd);
+    dl.appendChild(row);
+  });
+  blk.appendChild(dl);
+
+  const rep = document.createElement('div');
+  renderReplies(rep, data.replies);
+  blk.appendChild(rep);
+  return blk;
+}
+
+function renderHistory(days) {
+  const box = document.getElementById('historyBody');
+  box.innerHTML = '';
+
+  if (!days || !days.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.style.textAlign = 'center';
+    p.textContent = 'まだ報告がありません。';
+    box.appendChild(p);
+    return;
+  }
+
+  days.forEach(d => {
+    const card = document.createElement('section');
+    const h    = document.createElement('h3');
+    card.className = 'histday';
+    h.textContent  = d.date;
+    card.appendChild(h);
+    card.appendChild(histBlock('始業', 'start', d.start,
+      [['時刻', 'time'], ['体調', 'taicho'], ['自由記述', 'memo']]));
+    card.appendChild(histBlock('終業', 'end', d.end,
+      [['時刻', 'time'], ['昼等休憩', 'kyukei'], ['訓練・作業内容', 'sagyo'],
+       ['備考', 'biko'], ['自由記述', 'memo']]));
+    box.appendChild(card);
+  });
+}
+
+document.getElementById('btnHistory').addEventListener('click', async () => {
+  const btn = document.getElementById('btnHistory');
+  clearError(historyMsg);
+  document.getElementById('historyBody').innerHTML =
+    '<p class="hint" style="text-align:center;">読み込んでいます…</p>';
+  show('history');
+
+  btn.disabled = true;
+  try {
+    const r = await callApiRetry({
+      action: 'history',
+      token: localStorage.getItem(TOKEN_KEY),
+      days: 14
+    }, 2, 'days');
+
+    if (r.ok) {
+      renderHistory(r.days);
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      document.getElementById('historyBody').innerHTML = '';
+      showError(historyMsg, '読み込めませんでした。もう一度お試しください。');
+    }
+  } catch (e) {
+    document.getElementById('historyBody').innerHTML = '';
+    showError(historyMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btnHistoryBack').addEventListener('click', () => show('report'));
 
 /* --- ログアウト ------------------------------------------------------- */
 function logout(message) {
