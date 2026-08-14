@@ -213,6 +213,21 @@
   .reply-head { font-size: 13px; font-weight: 700; color: var(--accent-dk); margin-bottom: 2px; }
   .reply-body { font-size: 15px; white-space: pre-wrap; word-break: break-word; }
 
+  /* 返信の定型文ボタン。押すと入力欄に入り、そのあと自由に書き足せる。
+     文面はスプレッドシートの「返信定型文」シートで職員が管理する。 */
+  .suggest { margin: 6px 0 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .suggest button {
+    padding: 8px 13px;
+    font-size: 14px;
+    font-weight: 400;
+    text-align: left;
+    background: #eef4fb;
+    border: 1px solid #b9d2ee;
+    color: var(--accent-dk);
+  }
+  .suggest button:hover { background: #dfeaf7; }
+  .suggest-label { font-size: 13px; color: var(--muted); margin: 0 0 2px; }
+
   .replybox { margin-top: 10px; }
   .replybox textarea { min-height: 70px; font-size: 16px; }
   .replybox .row { display: flex; gap: 10px; margin-top: 8px; }
@@ -491,6 +506,12 @@ document.getElementById('staffNo').addEventListener('keydown', e => {
 const listMsg = document.getElementById('listMsg');
 let items = [];
 
+/* 返信の定型文。始業への返信と終業への返信で使い分ける。
+ * ★中身はスプレッドシートの「返信定型文」シートから来る。
+ *   一覧を読み込むたびに一緒に受け取るので、通信の往復は増えない。
+ *   職員がシートを直せば、次に「更新」を押したときから新しい文面になる。 */
+let templates = { '始業': [], '終業': [] };
+
 function enterList() {
   document.getElementById('who').textContent = staffName + ' さん';
   show('list');
@@ -520,6 +541,7 @@ async function loadList() {
       staffName = r.name || staffName;
       document.getElementById('who').textContent = staffName + ' さん';
       items = r.items || [];
+      if (r.templates) templates = r.templates;   // シートで直した文面がここで反映される
       renderList();
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
@@ -665,9 +687,42 @@ function renderReplyBox(it, card, focusOpen) {
   cancel.className   = 'btn-small';
   cancel.textContent = 'やめる';
   msg.className = 'msg msg-error hidden';
-  msg.setAttribute('role', 'alert');
   row.appendChild(send);
   row.appendChild(cancel);
+
+  /* 定型文のボタン。始業への返信か終業への返信かで出し分ける。
+   * 押しても入力欄を上書きせず、改行して足すだけにしてある。
+   * いくつか組み合わせてから、続けて自由に書けるようにするため。 */
+  const tpl = templates[it.kubun] || [];
+  if (tpl.length) {
+    const lab = document.createElement('p');
+    const box = document.createElement('div');
+    lab.className = 'suggest-label';
+    lab.textContent = 'よく使う文（押すと入ります）';
+    box.className = 'suggest';
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', it.kubun + 'への返信によく使う文');
+
+    tpl.forEach(t => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = t;
+      // ボタンが並ぶので、押すと何が起きるかを読み上げだけで分かるようにする
+      b.setAttribute('aria-label', '「' + t + '」を入れる');
+      b.addEventListener('click', () => {
+        const now = ta.value.replace(/\s+$/, '');
+        ta.value = now ? now + '\n' + t : t;
+        ta.focus();
+        // カーソルを末尾に置いて、そのまま続きが書けるようにする
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        announce('入れました。' + t);
+      });
+      box.appendChild(b);
+    });
+    form.appendChild(lab);
+    form.appendChild(box);
+  }
+
   form.appendChild(ta);
   form.appendChild(row);
   form.appendChild(msg);
