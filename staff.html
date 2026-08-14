@@ -47,6 +47,26 @@
 
   .hidden { display: none !important; }
 
+  /* ★スクリーンリーダーにだけ読ませる文字。
+     display:none にすると読み上げの対象から外れてしまうので、
+     場所をずらして目に見えなくする方式にする。 */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* 画面を切り替えたとき、その画面そのものにフォーカスを移す。
+     読み上げの開始位置を作るためだけなので、枠は出さない。 */
+  section[tabindex="-1"]:focus { outline: none; }
+
   label, .label { display: block; font-weight: 700; margin: 18px 0 6px; }
   .panel > *:first-child { margin-top: 0; }
   .hint { font-weight: 400; font-size: 14px; color: var(--muted); margin: -2px 0 8px; }
@@ -85,7 +105,11 @@
     background: var(--accent);
   }
   .btn-main:hover    { background: var(--accent-dk); }
-  .btn-main:disabled { background: #9aa4b0; cursor: default; }
+  /* ★disabled ではなく aria-disabled を使う。
+     disabled にするとブラウザがフォーカスを外してしまい、
+     スクリーンリーダーの利用者が送信中に迷子になるため。 */
+  .btn-main[aria-disabled="true"] { background: #9aa4b0; cursor: default; }
+  .btn-main[aria-disabled="true"]:hover { background: #9aa4b0; }
 
   .btn-small {
     padding: 9px 16px;
@@ -94,7 +118,9 @@
     color: var(--accent-dk);
   }
   .btn-small:hover { background: #eef4fb; }
-  .btn-small:disabled { border-color: #c7ced6; color: #9aa4b0; cursor: default; }
+  .btn-small[aria-disabled="true"] {
+    border-color: #c7ced6; color: #9aa4b0; cursor: default; background: #fff;
+  }
 
   .linkbtn {
     display: block;
@@ -143,7 +169,14 @@
   }
   .card.done { background: #f4f7f4; }
 
-  .card .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+  /* 見出し(h3)にしてある。報告が何十件も並ぶので、
+     スクリーンリーダーの見出しジャンプで1件ずつ渡り歩けるようにするため。 */
+  .card .top {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin: 0 0 8px;
+    font-size: inherit;
+    font-weight: 400;
+  }
   .card .nm  { font-size: 18px; font-weight: 700; }
   .card .dt  { color: var(--muted); font-size: 14px; }
   .kind {
@@ -215,8 +248,16 @@
   <h1>始業・終業報告（職員用）</h1>
   <p class="sub">利用者からの報告を見て、その場で返信できます</p>
 
+  <!-- ★スクリーンリーダーへの読み上げ専用の場所。
+       画面が切り替わっただけでは何が起きたか伝わらないので、
+       「送信しました」「○件」などをここに書き込んで読ませる。
+       常に画面上に存在させておくこと(隠したり出したりすると読まれない)。 -->
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="announcerAlert" class="sr-only" role="alert" aria-atomic="true"></div>
+
   <!-- ===== 読み込み中 ===== -->
-  <section id="screen-loading" class="panel hidden" aria-live="polite">
+  <section id="screen-loading" class="panel hidden" tabindex="-1" aria-labelledby="h-loading">
+    <h2 id="h-loading" class="sr-only">読み込み中</h2>
     <div class="loading-box">
       <div class="spinner spinner-dark" role="presentation"></div>
       <p>読み込んでいます</p>
@@ -224,33 +265,38 @@
   </section>
 
   <!-- ===== ログイン ===== -->
-  <section id="screen-login" class="panel hidden" aria-labelledby="h-login">
+  <section id="screen-login" class="panel hidden" tabindex="-1" aria-labelledby="h-login">
     <h2 id="h-login" class="label" style="margin-top:0;">職員ログイン</h2>
 
     <label for="staffNo">職員番号</label>
-    <p class="hint">スプレッドシートの「職員」シートに載っています</p>
+    <p class="hint" id="hint-staffNo">スプレッドシートの「職員」シートに載っています</p>
     <input id="staffNo" type="text" inputmode="numeric" autocomplete="username"
-           maxlength="10" enterkeyhint="next">
+           maxlength="10" enterkeyhint="next" aria-describedby="hint-staffNo">
 
     <label for="pin">暗証番号（4桁）</label>
     <div class="pin-row">
       <input id="pin" type="password" inputmode="numeric" autocomplete="current-password"
              maxlength="4" enterkeyhint="go">
-      <button type="button" id="pinToggle" class="pin-toggle" aria-label="暗証番号を表示">表示</button>
+      <button type="button" id="pinToggle" class="pin-toggle"
+              aria-pressed="false" aria-label="暗証番号を表示する">表示</button>
     </div>
 
     <button type="button" id="btnLogin" class="btn-main">ログイン</button>
-    <div id="loginMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="loginMsg" class="msg msg-error hidden"></div>
   </section>
 
   <!-- ===== 一覧 ===== -->
-  <section id="screen-list" class="hidden" aria-labelledby="h-list">
-    <h2 id="h-list" class="hidden">報告の一覧</h2>
+  <section id="screen-list" class="hidden" tabindex="-1" aria-labelledby="h-list">
+    <!-- ★sr-only にしてある。display:none だと画面の名前として使えず、
+         見出しジャンプでもここに飛べないため。 -->
+    <h2 id="h-list" class="sr-only">報告の一覧</h2>
 
     <div class="bar">
       <span class="who" id="who"></span>
       <label class="inline" for="days">期間
-        <select id="days">
+        <!-- プルダウンを label で囲んでいるので、
+             選択肢まで名前に混ざらないよう aria-label で上書きする -->
+        <select id="days" aria-label="期間">
           <option value="1">本日</option>
           <option value="3">3日</option>
           <option value="7" selected>1週間</option>
@@ -264,7 +310,7 @@
     </div>
 
     <div id="listBody"></div>
-    <div id="listMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="listMsg" class="msg msg-error hidden"></div>
 
     <button type="button" id="btnLogout" class="linkbtn">ログアウト</button>
   </section>
@@ -291,9 +337,24 @@ const screens = {
   login:   document.getElementById('screen-login'),
   list:    document.getElementById('screen-list')
 };
+/* ★スクリーンリーダーへの読み上げ。
+ * 画面の隅に置いた読み上げ専用の場所に文字を入れると読まれる。目には見えない。
+ * 同じ文言を続けて入れても読み直さないので、いったん空にしてから入れる。 */
+function announce(text, assertive) {
+  const el = document.getElementById(assertive ? 'announcerAlert' : 'announcer');
+  if (!el) return;
+  el.textContent = '';
+  setTimeout(() => { el.textContent = text; }, 60);
+}
+
+/* ★画面の切り替えは display:none の付け外しだけなので、そのままだと
+ * 読み上げの位置は消えた画面に残ったままになる。
+ * 新しい画面そのもの(tabindex="-1")にフォーカスを移して読み直させる。 */
 function show(which) {
   Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
   window.scrollTo(0, 0);
+  const el = screens[which];
+  if (el) el.focus({ preventScroll: true });
 }
 
 /* --- サーバーとのやりとり ----------------------------------------------
@@ -337,20 +398,32 @@ async function callApiRetry(payload, attempts, requiredField) {
   throw lastErr;
 }
 
+/* ★btn.disabled ではなく aria-disabled を使う。
+ * disabled にするとブラウザがフォーカスをボタンから外してしまい、
+ * 読み上げを頼りにしている人が待っている間に迷子になるため。
+ * 二度押しは isBusy() で防ぐ。 */
 function setBusy(btn, label) {
   btn.dataset.label = btn.dataset.label || btn.textContent;
-  btn.disabled = true;
+  btn.setAttribute('aria-disabled', 'true');
+  btn.dataset.busy = '1';
   btn.innerHTML = '<span class="spinner" role="presentation"></span>' + label;
+  announce(label);
 }
 function setIdle(btn, label) {
-  btn.disabled = false;
+  btn.removeAttribute('aria-disabled');
+  delete btn.dataset.busy;
   btn.textContent = label || btn.dataset.label || '';
 }
+function isBusy(btn) { return btn.dataset.busy === '1'; }
 
+/* 読み上げは announce() に一本化してある。
+ * role="alert" を付けた要素を display:none から出す形だと、
+ * 読まれたり読まれなかったりで当てにならないため。 */
 function showError(el, text) {
   el.textContent = text;
   el.classList.add('msg-error');
   el.classList.remove('msg-wait', 'hidden');
+  announce(text, true);
 }
 function clearError(el) {
   el.textContent = '';
@@ -367,17 +440,21 @@ document.getElementById('pinToggle').addEventListener('click', () => {
   const showing = pin.type === 'text';
   pin.type = showing ? 'password' : 'text';
   btn.textContent = showing ? '表示' : '隠す';
-  btn.setAttribute('aria-label', showing ? '暗証番号を表示' : '暗証番号を隠す');
+  btn.setAttribute('aria-pressed', String(!showing));
+  btn.setAttribute('aria-label', showing ? '暗証番号を表示する' : '暗証番号を隠す');
 });
 
 async function doLogin() {
   const btn     = document.getElementById('btnLogin');
+  if (isBusy(btn)) return;
   const staffNo = document.getElementById('staffNo').value.trim();
   const pin     = document.getElementById('pin').value.trim();
   clearError(loginMsg);
 
+  // 直すべき欄までフォーカスを連れて行く
   if (!staffNo || !pin) {
     showError(loginMsg, '職員番号と暗証番号を入力してください。');
+    document.getElementById(staffNo ? 'pin' : 'staffNo').focus();
     return;
   }
 
@@ -391,9 +468,11 @@ async function doLogin() {
       enterList();
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからお試しください。');
+      document.getElementById('staffNo').focus();
     } else {
       showError(loginMsg, '職員番号または暗証番号が違います。' +
         (typeof r.rest === 'number' ? `（あと${r.rest}回まで）` : ''));
+      document.getElementById('pin').focus();
     }
   } catch (e) {
     showError(loginMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
@@ -424,6 +503,7 @@ function newReqId() {
 
 async function loadList() {
   const btn  = document.getElementById('btnReload');
+  if (isBusy(btn)) return;
   const body = document.getElementById('listBody');
   clearError(listMsg);
   body.innerHTML = '<div class="loading-box"><div class="spinner spinner-dark"></div><p>読み込んでいます</p></div>';
@@ -468,7 +548,7 @@ function addItem(dl, label, value) {
   dl.appendChild(row);
 }
 
-function renderList() {
+function renderList(quiet) {
   const body    = document.getElementById('listBody');
   const onlyYet = document.getElementById('onlyYet').checked;
   body.innerHTML = '';
@@ -480,17 +560,29 @@ function renderList() {
     p.style.textAlign = 'center';
     p.textContent = onlyYet ? '未返信の報告はありません。' : 'この期間の報告はありません。';
     body.appendChild(p);
+    if (!quiet) announce(p.textContent);
     return;
   }
 
   shown.forEach(it => body.appendChild(renderCard(it)));
+
+  // 何件あって、そのうち何件が未返信かを読み上げる。
+  // 一覧を目で見渡せない人にとっては、これが全体像になる。
+  if (!quiet) {
+    const yet = shown.filter(it => !it.replies.length).length;
+    announce(shown.length + '件を表示しました。うち未返信は' + yet + '件です。');
+  }
 }
 
-function renderCard(it) {
+// focusOpen: 返信を送ったあとにカードを作り直すとき、
+// 「返信する」ボタンへフォーカスを戻すかどうか
+function renderCard(it, focusOpen) {
   const card = document.createElement('div');
   card.className = 'card' + (it.replies.length ? ' done' : '');
 
-  const top  = document.createElement('div');
+  // 1件ごとに見出しにしておく。報告が何十件も並ぶので、
+  // 読み上げの見出しジャンプで渡り歩けるようにするため。
+  const top  = document.createElement('h3');
   const nm   = document.createElement('span');
   const kind = document.createElement('span');
   const dt   = document.createElement('span');
@@ -533,13 +625,13 @@ function renderCard(it) {
     card.appendChild(box);
   });
 
-  card.appendChild(renderReplyBox(it, card));
+  card.appendChild(renderReplyBox(it, card, focusOpen));
   return card;
 }
 
 /* 返信の入力欄。最初はボタンだけを出しておき、押したら広がる。
  * 一覧に何十件も並ぶので、最初から入力欄を出すと画面が長くなりすぎるため。 */
-function renderReplyBox(it, card) {
+function renderReplyBox(it, card, focusOpen) {
   const wrap = document.createElement('div');
   wrap.className = 'replybox';
 
@@ -547,7 +639,14 @@ function renderReplyBox(it, card) {
   open.type = 'button';
   open.className = 'btn-small';
   open.textContent = it.replies.length ? 'さらに返信する' : '返信する';
+  /* ★「返信する」ボタンが件数ぶん並ぶ。読み上げでボタンを拾い読みしたとき
+       どの報告のものか分かるよう、宛先を名前に含める。 */
+  open.setAttribute('aria-label',
+    open.textContent + '：' + it.name + 'さんの' + it.kubun
+    + '（' + it.date + ' ' + it.time + '）');
   wrap.appendChild(open);
+  // 返信を送ったあとの作り直しでは、ここにフォーカスを戻す
+  if (focusOpen) setTimeout(() => open.focus(), 0);
 
   const form = document.createElement('div');
   form.className = 'hidden';
@@ -583,6 +682,7 @@ function renderReplyBox(it, card) {
     form.classList.add('hidden');
     open.classList.remove('hidden');
     clearError(msg);
+    open.focus();   // 入力欄が消えるので、フォーカスを元のボタンに戻す
   });
 
   /* 二重登録を防ぐための引換番号。
@@ -591,6 +691,7 @@ function renderReplyBox(it, card) {
   let pendingReqId = null;
 
   send.addEventListener('click', async () => {
+    if (isBusy(send)) return;
     const text = ta.value.trim();
     clearError(msg);
     if (!text) {
@@ -617,7 +718,10 @@ function renderReplyBox(it, card) {
         open.classList.remove('hidden');
         // 送った内容をその場に足す。一覧を読み直さなくても見えるように。
         it.replies.push({ who: r.who || staffName, text: text, at: '送信しました' });
-        card.replaceWith(renderCard(it));
+        /* ★カードをまるごと作り直すので、いま押していたボタンが消えて
+             フォーカスが行き場を失う。新しいカードの「返信する」に戻す。 */
+        card.replaceWith(renderCard(it, true));
+        announce(it.name + 'さんの' + it.kubun + 'への返信を送信しました。');
       } else if (r.error === 'unauthorized') {
         logout('ログインの有効期限が切れました。もう一度ログインしてください。');
       } else if (r.error === 'report_not_found') {

@@ -52,6 +52,26 @@
 
   .hidden { display: none !important; }
 
+  /* ★スクリーンリーダーにだけ読ませる文字。
+     display:none にすると読み上げの対象から外れてしまうので、
+     場所をずらして目に見えなくする方式にする。 */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* 画面を切り替えたとき、その画面そのものにフォーカスを移す。
+     読み上げの開始位置を作るためだけなので、枠は出さない。 */
+  section[tabindex="-1"]:focus { outline: none; }
+
   label, .label {
     display: block;
     font-weight: 700;
@@ -104,23 +124,63 @@
     background: var(--accent);
   }
   .btn-main:hover  { background: var(--accent-dk); }
-  .btn-main:disabled { background: #9aa4b0; cursor: default; }
+  /* ★disabled ではなく aria-disabled を使う。
+     disabled にするとブラウザがフォーカスを外してしまい、
+     スクリーンリーダーの利用者が送信中に迷子になるため。 */
+  .btn-main[aria-disabled="true"] { background: #9aa4b0; cursor: default; }
+  .btn-main[aria-disabled="true"]:hover { background: #9aa4b0; }
 
-  /* 始業・終業の選択ボタン */
-  .kubun { display: flex; gap: 12px; }
-  .kubun button {
+  /* 始業・終業の選択。
+     ★見た目はボタンのままだが、中身は本物のラジオボタンにしてある。
+       スクリーンリーダーが「始業 ラジオボタン 1/2」と読み、
+       矢印キーで選び替えられるようにするため。 */
+  .kubun, .choice { display: flex; }
+  .kubun { gap: 12px; }
+  .choice { gap: 10px; }
+
+  .kubun label, .choice label {
     flex: 1;
-    padding: 22px 8px;
-    font-size: 22px;
+    display: block;
+    /* 中のラジオボタンを、この枠の中に留めておくために必要。
+       これが無いと、キーボードで選んだときに画面が思わぬ場所へ飛ぶ */
+    position: relative;
+    margin: 0;
+    text-align: center;
+    cursor: pointer;
     background: #fff;
-    border: 2px solid var(--line);
     color: var(--muted);
+    border: 2px solid var(--line);
+    border-radius: 8px;
   }
-  .kubun button[aria-pressed="true"][data-kubun="始業"] {
+  .kubun label { padding: 22px 8px; font-size: 22px; }
+  .choice label { padding: 16px 4px; font-size: 18px; }
+
+  /* ラジオボタン本体は見えなくするが、キーボードで操作できる状態は保つ。
+     display:none や visibility:hidden にすると選べなくなるので使わない。 */
+  .kubun input, .choice input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+  }
+
+  /* 選択中の見た目。:has() に頼らず JS が付けるクラスで塗る
+     (古いブラウザでも「どちらを選んでいるか」が必ず分かるように) */
+  .kubun label.on[data-kubun="始業"] {
     background: var(--start); border-color: var(--start-dk); color: #fff;
   }
-  .kubun button[aria-pressed="true"][data-kubun="終業"] {
+  .kubun label.on[data-kubun="終業"] {
     background: var(--end); border-color: var(--end-dk); color: #fff;
+  }
+  .choice label.on {
+    background: var(--accent); border-color: var(--accent-dk); color: #fff;
+  }
+  .kubun label:focus-within, .choice label:focus-within {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .greet {
@@ -168,11 +228,14 @@
     line-height: 1;
     margin-bottom: 8px;
   }
+  /* 各画面の見出し。<h2> なので上の余白を打ち消しておく
+     (見出しにしているのは、スクリーンリーダーの見出しジャンプで
+      画面の頭に飛べるようにするため) */
   .done-title {
     text-align: center;
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin: 0 0 20px;
   }
   .summary {
     border: 1px solid var(--line);
@@ -239,19 +302,7 @@
   .loading-box .lead { font-size: 19px; font-weight: 700; margin: 0 0 6px; }
   .loading-box .sub  { font-size: 15px; color: var(--muted); margin: 0; }
 
-  /* 体調の選択(3つのボタン)。プルダウンより押しやすいのでボタンにしている */
-  .choice { display: flex; gap: 10px; }
-  .choice button {
-    flex: 1;
-    padding: 16px 4px;
-    font-size: 18px;
-    background: #fff;
-    border: 2px solid var(--line);
-    color: var(--muted);
-  }
-  .choice button[aria-pressed="true"] {
-    background: var(--accent); border-color: var(--accent-dk); color: #fff;
-  }
+  /* 体調の選択は上の .kubun とまとめて指定している(ラジオボタン化のため) */
 
   /* 訓練・作業内容の候補。本人が前に書いた内容を押すだけで入れられる */
   .suggest { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
@@ -392,10 +443,18 @@
 
   <h1>始業・終業報告</h1>
 
+  <!-- ★スクリーンリーダーへの読み上げ専用の場所。
+       画面が切り替わっただけでは何が起きたか伝わらないので、
+       「送信しています」「保存しました」などをここに書き込んで読ませる。
+       常に画面上に存在させておくこと(隠したり出したりすると読まれない)。 -->
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="announcerAlert" class="sr-only" role="alert" aria-atomic="true"></div>
+
   <!-- ===== 画面0: 読み込み中 =====
        ログイン状態が保存されていると、確認が終わるまで数秒かかる。
        その間を空白にすると「壊れた」と思われるので必ず何か出す。 -->
-  <section id="screen-loading" class="panel hidden" aria-live="polite">
+  <section id="screen-loading" class="panel hidden" tabindex="-1" aria-labelledby="h-loading">
+    <h2 id="h-loading" class="sr-only">読み込み中</h2>
     <div class="loading-box">
       <div class="spinner spinner-dark" role="presentation"></div>
       <p class="lead">読み込んでいます</p>
@@ -404,34 +463,38 @@
   </section>
 
   <!-- ===== 画面1: ログイン ===== -->
-  <section id="screen-login" class="panel hidden" aria-labelledby="h-login">
+  <section id="screen-login" class="panel hidden" tabindex="-1" aria-labelledby="h-login">
     <h2 id="h-login" class="label" style="margin-top:0;">ログイン</h2>
 
     <label for="userNo">利用者番号</label>
-    <p class="hint">職員からお伝えした番号を入力してください</p>
+    <p class="hint" id="hint-userNo">職員からお伝えした番号を入力してください</p>
     <input id="userNo" type="text" inputmode="numeric" autocomplete="username"
-           maxlength="10" enterkeyhint="next">
+           maxlength="10" enterkeyhint="next" aria-describedby="hint-userNo">
 
     <label for="pin">暗証番号（4桁）</label>
     <div class="pin-row">
       <input id="pin" type="password" inputmode="numeric" autocomplete="current-password"
              maxlength="4" enterkeyhint="go">
-      <button type="button" id="pinToggle" class="pin-toggle" aria-label="暗証番号を表示">表示</button>
+      <button type="button" id="pinToggle" class="pin-toggle"
+              aria-pressed="false" aria-label="暗証番号を表示する">表示</button>
     </div>
 
     <button type="button" id="btnLogin" class="btn-main">ログイン</button>
-    <div id="loginMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="loginMsg" class="msg msg-error hidden"></div>
   </section>
 
   <!-- ===== 画面2: 報告の入力 ===== -->
-  <section id="screen-report" class="panel hidden" aria-labelledby="h-report">
+  <section id="screen-report" class="panel hidden" tabindex="-1" aria-labelledby="h-report">
+    <h2 id="h-report" class="sr-only">報告の入力</h2>
     <p id="greet" class="greet"></p>
     <p id="today" class="today"></p>
 
     <!-- 本日すでに報告したかどうか。
          「送れたか分からない」不安をなくすのが目的なので、
-         入力欄より先、画面を開いてすぐ目に入る位置に置く。 -->
-    <div class="today-status" id="todayStatus" aria-live="polite">
+         入力欄より先、画面を開いてすぐ目に入る位置に置く。
+         見出しを付けてあるのは、読み上げでここに直接飛べるようにするため。 -->
+    <h3 class="sr-only">本日の報告状況</h3>
+    <div class="today-status" id="todayStatus">
       <div class="row">
         <span class="k">始業</span>
         <span class="mark" id="ts-start-mark" aria-hidden="true"></span>
@@ -447,10 +510,12 @@
       <div id="ts-end-replies"></div>
     </div>
 
-    <h2 id="h-report" class="label">区分</h2>
-    <div class="kubun" role="group" aria-label="区分を選んでください">
-      <button type="button" data-kubun="始業" aria-pressed="false">始業</button>
-      <button type="button" data-kubun="終業" aria-pressed="false">終業</button>
+    <!-- ★ラジオボタンにしてある(見た目はボタンのまま)。
+         スクリーンリーダーが選択状態を読み、矢印キーで選び替えられる。 -->
+    <p class="label" id="lbl-kubun">区分</p>
+    <div class="kubun" role="radiogroup" aria-label="区分">
+      <label data-kubun="始業"><input type="radio" name="kubun" value="始業">始業</label>
+      <label data-kubun="終業"><input type="radio" name="kubun" value="終業">終業</label>
     </div>
 
     <label for="time">時刻</label>
@@ -459,39 +524,46 @@
     <!-- ===== 始業のときだけ出る ===== -->
     <div id="sec-start" class="hidden">
       <p class="label" id="lbl-taicho">体調</p>
-      <div class="choice" role="group" aria-labelledby="lbl-taicho">
-        <button type="button" data-taicho="良好"   aria-pressed="false">良好</button>
-        <button type="button" data-taicho="やや不良" aria-pressed="false">やや不良</button>
-        <button type="button" data-taicho="不良"   aria-pressed="false">不良</button>
+      <div class="choice" role="radiogroup" aria-label="体調">
+        <label data-taicho="良好"><input type="radio" name="taicho" value="良好">良好</label>
+        <label data-taicho="やや不良"><input type="radio" name="taicho" value="やや不良">やや不良</label>
+        <label data-taicho="不良"><input type="radio" name="taicho" value="不良">不良</label>
       </div>
     </div>
 
     <!-- ===== 終業のときだけ出る ===== -->
     <div id="sec-end" class="hidden">
       <label for="kyukei">昼等休憩</label>
-      <p class="hint">お昼などで休んだ時間の合計を選んでください</p>
-      <select id="kyukei"></select>
+      <p class="hint" id="hint-kyukei">お昼などで休んだ時間の合計を選んでください。休んでいない場合は 0:00 を選んでください</p>
+      <select id="kyukei" aria-describedby="hint-kyukei"></select>
 
       <label for="sagyo">訓練・作業内容</label>
-      <p class="hint">今日おこなった内容を書いてください（簡単で結構です）</p>
-      <textarea id="sagyo" style="min-height:80px" enterkeyhint="done"></textarea>
+      <p class="hint" id="hint-sagyo">今日おこなった内容を書いてください（簡単で結構です）</p>
+      <textarea id="sagyo" style="min-height:80px" enterkeyhint="done"
+                aria-describedby="hint-sagyo"></textarea>
       <p class="suggest-label hidden" id="sagyoSuggestLabel">前に書いた内容（押すと入ります）</p>
-      <div class="suggest" id="sagyoSuggest"></div>
+      <div class="suggest" id="sagyoSuggest" role="group" aria-label="前に書いた内容"></div>
 
       <!-- いつもの予定。登録があるときだけ、その曜日の分が出る -->
       <div id="routineWrap" class="hidden">
         <p class="label" id="lbl-routine">いつもの予定（<span id="routineDay"></span>曜日）</p>
-        <p class="hint">その日に無かったものは、チェックを外してください</p>
-        <div class="routines" id="routineList" role="group" aria-labelledby="lbl-routine"></div>
+        <p class="hint" id="hint-routine">その日に無かったものは、チェックを外してください</p>
+        <!-- aria-label は曜日が決まったところで JS が入れ直す -->
+        <div class="routines" id="routineList" role="group"
+             aria-label="いつもの予定" aria-describedby="hint-routine"></div>
       </div>
 
       <label for="biko">備考</label>
-      <p class="hint">作業に関して気づいたことや、他のサービスを使った時間など。<br>
+      <p class="hint" id="hint-biko">作業に関して気づいたことや、他のサービスを使った時間など。<br>
         例：13:00〜13:30 担当者会議</p>
-      <textarea id="biko" style="min-height:80px" enterkeyhint="done"></textarea>
+      <textarea id="biko" style="min-height:80px" enterkeyhint="done"
+                aria-describedby="hint-biko"></textarea>
 
-      <!-- 備考として実際に何が記録されるかを、送信する前に見せる -->
-      <div class="preview" id="bikoPreview" aria-live="polite">
+      <!-- 備考として実際に何が記録されるかを、送信する前に見せる。
+           ★ここに aria-live を付けてはいけない。
+             1文字打つたびに備考の全文が読み上げられて使い物にならなくなる。
+             読み上げは、チェックを付け外ししたときだけ announce() で行う。 -->
+      <div class="preview" id="bikoPreview">
         <div class="preview-title">本日の備考として記録されます</div>
         <div class="preview-body" id="bikoPreviewBody"></div>
       </div>
@@ -500,40 +572,41 @@
     </div>
 
     <label for="memo">自由記述（任意）</label>
-    <p class="hint">挨拶や、業務と関係のない話などをどうぞ。書かなくても送れます</p>
-    <textarea id="memo" style="min-height:90px" enterkeyhint="done"></textarea>
+    <p class="hint" id="hint-memo">挨拶や、業務と関係のない話などをどうぞ。書かなくても送れます</p>
+    <textarea id="memo" style="min-height:90px" enterkeyhint="done"
+              aria-describedby="hint-memo"></textarea>
 
     <button type="button" id="btnSend" class="btn-main">送信する</button>
-    <div id="reportMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="reportMsg" class="msg msg-error hidden"></div>
 
     <button type="button" id="btnHistory" class="linkbtn">これまでの報告を見る</button>
     <button type="button" id="btnLogout" class="linkbtn">別の人が使う（ログアウト）</button>
   </section>
 
   <!-- ===== 画面5: いつもの予定の登録 ===== -->
-  <section id="screen-routine" class="panel hidden" aria-labelledby="h-routine">
-    <p id="h-routine" class="done-title" style="margin-bottom:4px;">いつもの予定</p>
+  <section id="screen-routine" class="panel hidden" tabindex="-1" aria-labelledby="h-routine">
+    <h2 id="h-routine" class="done-title" style="margin-bottom:4px;">いつもの予定</h2>
     <p class="hint" style="text-align:center;">毎週きまっている予定を登録しておくと、<br>その曜日の終業報告に最初から出てきます</p>
     <div id="routineEditList"></div>
     <button type="button" id="btnRoutineAdd" class="btn-add">＋ 予定を足す</button>
-    <div id="routineMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="routineMsg" class="msg msg-error hidden"></div>
     <button type="button" id="btnRoutineSave" class="btn-main">保存する</button>
     <button type="button" id="btnRoutineBack" class="linkbtn">保存せずにもどる</button>
   </section>
 
   <!-- ===== 画面4: これまでの報告 ===== -->
-  <section id="screen-history" class="panel hidden" aria-labelledby="h-history">
-    <p id="h-history" class="done-title" style="margin-bottom:4px;">これまでの報告</p>
+  <section id="screen-history" class="panel hidden" tabindex="-1" aria-labelledby="h-history">
+    <h2 id="h-history" class="done-title" style="margin-bottom:4px;">これまでの報告</h2>
     <p class="hint" style="text-align:center;">新しい日から順に表示しています</p>
     <div id="historyBody"></div>
-    <div id="historyMsg" class="msg msg-error hidden" role="alert"></div>
+    <div id="historyMsg" class="msg msg-error hidden"></div>
     <button type="button" id="btnHistoryBack" class="btn-main">報告の画面にもどる</button>
   </section>
 
   <!-- ===== 画面3: 送信完了 ===== -->
-  <section id="screen-done" class="panel hidden" aria-labelledby="h-done">
+  <section id="screen-done" class="panel hidden" tabindex="-1" aria-labelledby="h-done">
     <p class="done-mark" aria-hidden="true">✓</p>
-    <p id="h-done" class="done-title">送信しました</p>
+    <h2 id="h-done" class="done-title">送信しました</h2>
     <!-- 送った項目だけを並べる。中身は送信時に組み立てる -->
     <div class="summary">
       <dl id="s-list"></dl>
@@ -566,9 +639,37 @@ const screens = {
 };
 
 const WEEK_JP = ['日', '月', '火', '水', '木', '金', '土'];
+
+/* =======================================================================
+ * スクリーンリーダーへの読み上げ
+ * ---------------------------------------------------------------------
+ * ★画面の隅に置いた読み上げ専用の場所(#announcer)に文字を入れると、
+ *   スクリーンリーダーがそれを読む。目には見えない。
+ *
+ * ★同じ文言を続けて入れても読み直さないので、いったん空にしてから入れる。
+ * ★assertive=true は、いま読んでいる内容を止めてでも伝えたいとき(エラー)。
+ * ======================================================================= */
+function announce(text, assertive) {
+  const el = document.getElementById(assertive ? 'announcerAlert' : 'announcer');
+  if (!el) return;
+  el.textContent = '';
+  setTimeout(() => { el.textContent = text; }, 60);
+}
+
+/* ★スクリーンリーダー対応の要。
+ *
+ * 画面の切り替えは display:none の付け外しだけなので、そのままだと
+ * 読み上げの位置は消えた画面に残ったままになる。目で見ている人には
+ * 画面が変わったことが分かるが、読み上げを頼りにしている人には
+ * 「ログインできたのか」「送信できたのか」がまったく伝わらない。
+ *
+ * 新しい画面そのもの(tabindex="-1" を付けてある)にフォーカスを移して、
+ * そこから読み直させる。各画面の見出しが画面名として読まれる。 */
 function show(which) {
   Object.keys(screens).forEach(k => screens[k].classList.toggle('hidden', k !== which));
   window.scrollTo(0, 0);
+  const el = screens[which];
+  if (el) el.focus({ preventScroll: true });
 }
 
 /* --- サーバーとのやりとり ----------------------------------------------
@@ -626,32 +727,49 @@ async function callApiRetry(payload, attempts, requiredField, timeoutMs) {
 
 /* ボタンを待機中の見た目にする。
  * Apps Script は応答までに5〜15秒かかることがあるので、
- * 「動いている」ことが目で分かるようにしておく。 */
+ * 「動いている」ことが目で分かるようにしておく。
+ *
+ * ★btn.disabled ではなく aria-disabled を使う。
+ *   disabled にするとブラウザがフォーカスをそのボタンから外してしまい、
+ *   読み上げを頼りにしている人が、待っている数秒〜十数秒のあいだ
+ *   自分がどこにいるのか分からなくなるため。
+ *   代わりに二度押しは isBusy() で防ぐ。 */
 function setBusy(btn, busyLabel) {
-  btn.disabled = true;
+  btn.setAttribute('aria-disabled', 'true');
+  btn.dataset.busy = '1';
   btn.innerHTML = '<span class="spinner" role="presentation"></span>' + busyLabel;
+  announce(busyLabel);
 }
 function setIdle(btn, label) {
-  btn.disabled = false;
+  btn.removeAttribute('aria-disabled');
+  delete btn.dataset.busy;
   btn.textContent = label;
 }
+function isBusy(btn) { return btn.dataset.busy === '1'; }
 
+/* 画面のメッセージ欄。
+ * ★role="alert" は使わず、読み上げは announce() に一本化してある。
+ *   role="alert" を付けた要素を display:none から出す形だと、
+ *   読まれたり読まれなかったりで当てにならないため。 */
 function showError(el, text) {
   el.textContent = text;
   el.classList.add('msg-error');
   el.classList.remove('msg-wait', 'msg-caution', 'hidden');
+  announce(text, true);
 }
 // 間違いではないが気づいてほしいこと(報告済みの区分をもう一度選んだ等)
 function showCaution(el, text) {
   el.textContent = text;
   el.classList.add('msg-caution');
   el.classList.remove('msg-error', 'msg-wait', 'hidden');
+  announce(text);
 }
 // 待っていることを伝えるだけの案内。赤くしないので警告に見えない。
+// 読み上げは setBusy が「送信しています…」と伝えるので、ここではしない。
 function showWaitNote(el) {
   el.textContent = '送信しています。画面を閉じずにそのままお待ちください。';
   el.classList.add('msg-wait');
-  el.classList.remove('msg-error', 'hidden');
+  el.classList.remove('msg-error', 'msg-caution', 'hidden');
 }
 function clearError(el) {
   el.textContent = '';
@@ -708,17 +826,22 @@ document.getElementById('pinToggle').addEventListener('click', () => {
   const showing = pin.type === 'text';
   pin.type = showing ? 'password' : 'text';
   btn.textContent = showing ? '表示' : '隠す';
-  btn.setAttribute('aria-label', showing ? '暗証番号を表示' : '暗証番号を隠す');
+  btn.setAttribute('aria-pressed', String(!showing));
+  btn.setAttribute('aria-label', showing ? '暗証番号を表示する' : '暗証番号を隠す');
 });
 
 async function doLogin() {
   const btn    = document.getElementById('btnLogin');
+  if (isBusy(btn)) return;   // 待っている間の二度押しを防ぐ
   const userNo = document.getElementById('userNo').value.trim();
   const pin    = document.getElementById('pin').value.trim();
   clearError(loginMsg);
 
+  // 入力が足りないときは、直すべき欄までフォーカスを連れて行く。
+  // 読み上げだけを頼りにしていると、どこへ戻ればよいか分からないため。
   if (!userNo || !pin) {
     showError(loginMsg, '利用者番号と暗証番号を入力してください。');
+    document.getElementById(userNo ? 'pin' : 'userNo').focus();
     return;
   }
 
@@ -731,9 +854,11 @@ async function doLogin() {
       enterReport(r.name, r.today, r.sagyoList, r.routines);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
+      document.getElementById('userNo').focus();
     } else {
       showError(loginMsg, '利用者番号または暗証番号が違います。' +
         (typeof r.rest === 'number' ? `（あと${r.rest}回まで）` : ''));
+      document.getElementById('pin').focus();
     }
   } catch (e) {
     showError(loginMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
@@ -809,6 +934,19 @@ function renderTodayStatus(today) {
   });
 }
 
+/* 本日の状況を一文にまとめる。
+ * 「送れたのか分からない」不安への答えそのものなので、
+ * 報告画面を開いたときに読み上げる。返信が来ていればその件数も伝える。 */
+function todayStatusSentence() {
+  const part = (label, key) => {
+    const t = currentToday[key];
+    const reps = (currentToday[key + 'Replies'] || []).length;
+    return label + 'は' + (t ? t + 'に報告済み' : 'まだ報告していません')
+      + (reps ? '、職員からの返信が' + reps + '件あります' : '');
+  };
+  return '本日の状況。' + part('始業', 'start') + '。' + part('終業', 'end') + '。';
+}
+
 /* 本人が前に書いた訓練・作業内容をボタンで並べる。
  * ★ここに出るのは必ず本人の入力だけ(サーバー側で名前で絞っている)。
  *   他の利用者の入力を混ぜてはいけない。 */
@@ -823,9 +961,12 @@ function renderSagyoSuggest(list) {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = text;
+    // ボタンが並ぶので、押すと何が起きるかが読み上げだけで分かるようにする
+    b.setAttribute('aria-label', '訓練・作業内容に「' + text + '」を入れる');
     b.addEventListener('click', () => {
-      document.getElementById('sagyo').value = text;
-      document.getElementById('sagyo').focus();
+      const ta = document.getElementById('sagyo');
+      ta.value = text;
+      ta.focus();   // 入力欄に移るので、読み上げが入った内容をそのまま読む
     });
     box.appendChild(b);
   });
@@ -851,8 +992,11 @@ function renderRoutineChecks() {
   const wrap = document.getElementById('routineWrap');
   const list = document.getElementById('routineList');
   const mine = todayRoutines();
+  const day  = WEEK_JP[new Date().getDay()];
 
-  document.getElementById('routineDay').textContent = WEEK_JP[new Date().getDay()];
+  document.getElementById('routineDay').textContent = day;
+  // 見えている文字と読み上げを合わせる(何曜日の予定なのかが分かるように)
+  list.setAttribute('aria-label', 'いつもの予定（' + day + '曜日）');
   list.innerHTML = '';
   wrap.classList.toggle('hidden', mine.length === 0);
 
@@ -865,7 +1009,16 @@ function renderRoutineChecks() {
     cb.dataset.text = r.text;
     cb.id = 'rt-' + i;
     sp.textContent = r.text;
-    cb.addEventListener('change', updateBikoPreview);
+    // ★for と id で明示的に結ぶ。
+    //   <label> で囲むだけだと、読み上げが「チェックボックス オン」としか
+    //   言わず、何にチェックを入れているのか分からないことがある。
+    lab.htmlFor = cb.id;
+    cb.addEventListener('change', () => {
+      updateBikoPreview();
+      // チェックを外した／付けたことと、その結果どう記録されるかを伝える
+      announce((cb.checked ? '追加しました：' : '外しました：') + r.text
+        + '。' + bikoSentence());
+    });
     lab.appendChild(cb);
     lab.appendChild(sp);
     list.appendChild(lab);
@@ -887,6 +1040,14 @@ function updateBikoPreview() {
   const text = composeBiko();
   body.textContent = text || '（記入なし）';
   body.classList.toggle('empty', !text);
+}
+
+// 読み上げ用。備考として実際に残る内容を一文にする。
+function bikoSentence() {
+  const text = composeBiko();
+  return text
+    ? '備考として記録されるのは、' + text.split('\n').join('、') + 'です。'
+    : '備考は記入なしです。';
 }
 
 function enterReport(name, today, sagyoList, routines) {
@@ -916,23 +1077,38 @@ function enterReport(name, today, sagyoList, routines) {
   // 報告済みの案内を出すことがあるので、clearError より後に呼ぶこと。
   setKubun(d.getHours() < 12 ? '始業' : '終業');
   show('report');
+
+  /* 本日の状況を読み上げる。画面を開いた人がいちばん知りたいこと。
+   * show() のフォーカス移動で読まれる内容とぶつからないよう、少し待つ。
+   * すでに報告済みの区分を選んでいる場合は setKubun がその案内を出すので、
+   * 二重に喋らせないようにここでは黙る。 */
+  const already = (currentKubun === '始業') ? currentToday.start : currentToday.end;
+  if (!already) setTimeout(() => announce(todayStatusSentence()), 500);
+}
+
+/* --- 区分・体調の選択 --------------------------------------------------
+ * ★見た目はボタンだが、中身は本物のラジオボタン。
+ *   スクリーンリーダーが「始業 ラジオボタン 1/2 選択済み」と読み、
+ *   矢印キーで選び替えられる。選択中の色付けは JS が .on で行う。
+ * --------------------------------------------------------------------- */
+function paintChoice(sel, attr, value) {
+  document.querySelectorAll(sel + ' input').forEach(r => { r.checked = (r.value === value); });
+  document.querySelectorAll(sel + ' label').forEach(l => {
+    l.classList.toggle('on', l.dataset[attr] === value);
+  });
 }
 
 function setTaicho(t) {
   currentTaicho = t;
-  document.querySelectorAll('.choice button').forEach(b => {
-    b.setAttribute('aria-pressed', String(b.dataset.taicho === t));
-  });
+  paintChoice('.choice', 'taicho', t);
 }
-document.querySelectorAll('.choice button').forEach(b => {
-  b.addEventListener('click', () => setTaicho(b.dataset.taicho));
+document.querySelectorAll('.choice input').forEach(r => {
+  r.addEventListener('change', () => setTaicho(r.value));
 });
 
 function setKubun(k) {
   currentKubun = k;
-  document.querySelectorAll('.kubun button').forEach(b => {
-    b.setAttribute('aria-pressed', String(b.dataset.kubun === k));
-  });
+  paintChoice('.kubun', 'kubun', k);
 
   /* 日報の項目は始業と終業で書くものが違う。
    * 関係のない欄を出しておくと迷わせるので、まるごと出し分ける。 */
@@ -949,8 +1125,16 @@ function setKubun(k) {
     clearError(reportMsg);
   }
 }
-document.querySelectorAll('.kubun button').forEach(b => {
-  b.addEventListener('click', () => setKubun(b.dataset.kubun));
+document.querySelectorAll('.kubun input').forEach(r => {
+  r.addEventListener('change', () => {
+    setKubun(r.value);
+    /* ★区分を変えると入力欄がまるごと入れ替わる。
+       目で見ていれば分かるが、読み上げでは何も起きていないように思える。
+       これから何を入力するのかを言葉で伝える。 */
+    announce(r.value === '始業'
+      ? '始業を選びました。入力するのは、時刻、体調、自由記述です。'
+      : '終業を選びました。入力するのは、時刻、昼等休憩、訓練・作業内容、備考、自由記述です。');
+  });
 });
 
 /* 送信完了画面に、実際に送った項目だけを並べる */
@@ -991,6 +1175,9 @@ function finishSent(r, f) {
     ['自由記述', f.memo]
   ]);
   show('done');
+  // 画面の見出し「送信しました」はフォーカス移動で読まれる。
+  // 何を送ったのかまで言い添えて、確かめ直さなくて済むようにする。
+  setTimeout(() => announce(f.kubun + '、' + f.time + ' の報告を送信しました。'), 500);
 }
 
 /* ★送れたかどうかをサーバーに聞きに行く(2026-08-13追加)。
@@ -1020,6 +1207,7 @@ async function confirmSent(reqId) {
 
 document.getElementById('btnSend').addEventListener('click', async () => {
   const btn    = document.getElementById('btnSend');
+  if (isBusy(btn)) return;   // 送信中の二度押しを防ぐ
   const time   = document.getElementById('time').value;
   const memo   = document.getElementById('memo').value.trim();
   const kyukei = document.getElementById('kyukei').value;
@@ -1028,14 +1216,17 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   const taicho = currentTaicho;
   clearError(reportMsg);
 
-  // 足りない項目があれば、その欄まで案内する
+  /* 足りない項目があれば、その欄までフォーカスを連れて行く。
+     ★スクロールさせるだけでは不十分。読み上げを頼りにしている人は
+       「どこへ戻ればよいか」が分からないので、必ず focus() する。 */
   if (!currentKubun) {
     showError(reportMsg, '「始業」か「終業」を選んでください。');
+    document.querySelector('.kubun input').focus();
     return;
   }
   if (currentKubun === '始業' && !taicho) {
     showError(reportMsg, '体調を選んでください。');
-    document.getElementById('sec-start').scrollIntoView({ block: 'center' });
+    document.querySelector('.choice input').focus();
     return;
   }
   if (currentKubun === '終業' && !kyukei) {
@@ -1109,17 +1300,26 @@ function routineRow(day, text) {
     sel.appendChild(o);
   });
   sel.value = day || WEEK_JP[new Date().getDay()];
-  sel.setAttribute('aria-label', '曜日');
 
   inp.type = 'text';
   inp.value = text || '';
   inp.placeholder = '例：14:45〜15:45 ヘルパー入浴';
-  inp.setAttribute('aria-label', '予定の内容');
 
   del.type = 'button';
   del.textContent = '削除';
-  del.setAttribute('aria-label', 'この予定を削除');
-  del.addEventListener('click', () => row.remove());
+  del.addEventListener('click', () => {
+    /* 行を消すとフォーカスが行き場を失う。
+       読み上げを頼りにしている人が迷子にならないよう、
+       次の行(なければ「予定を足す」)に移してから消えたことを伝える。 */
+    const box  = document.getElementById('routineEditList');
+    const rows = Array.from(box.querySelectorAll('.rtrow'));
+    const next = rows[rows.indexOf(row) + 1] || rows[rows.indexOf(row) - 1];
+    const gone = inp.value.trim();
+    row.remove();
+    renumberRoutineRows();
+    (next ? next.querySelector('input') : document.getElementById('btnRoutineAdd')).focus();
+    announce((gone ? gone : '空の行') + 'を削除しました。');
+  });
 
   row.appendChild(sel);
   row.appendChild(inp);
@@ -1127,27 +1327,47 @@ function routineRow(day, text) {
   return row;
 }
 
+/* 同じ「曜日」「予定の内容」「削除」が何組も並ぶので、
+ * 読み上げだけでは何件目を触っているのか分からない。番号を振っておく。 */
+function renumberRoutineRows() {
+  const rows = document.querySelectorAll('#routineEditList .rtrow');
+  rows.forEach((row, i) => {
+    const n = (i + 1) + '件目';
+    row.querySelector('select').setAttribute('aria-label', n + 'の曜日');
+    row.querySelector('input').setAttribute('aria-label', n + 'の予定の内容');
+    row.querySelector('button').setAttribute('aria-label', n + 'の予定を削除');
+  });
+}
+
 function renderRoutineEditor() {
   const box = document.getElementById('routineEditList');
   box.innerHTML = '';
   currentRoutines.forEach(r => box.appendChild(routineRow(r.day, r.text)));
   if (!currentRoutines.length) box.appendChild(routineRow('', ''));
+  renumberRoutineRows();
 }
 
 document.getElementById('btnRoutineEdit').addEventListener('click', () => {
   clearError(routineMsg);
   renderRoutineEditor();
   show('routine');
+  const n = document.querySelectorAll('#routineEditList .rtrow').length;
+  setTimeout(() => announce('登録されている予定は' + n + '件です。'), 500);
 });
 
 document.getElementById('btnRoutineAdd').addEventListener('click', () => {
-  document.getElementById('routineEditList').appendChild(routineRow('', ''));
+  const row = routineRow('', '');
+  document.getElementById('routineEditList').appendChild(row);
+  renumberRoutineRows();
+  row.querySelector('input').focus();   // 足した行にそのまま書き始められる
+  announce('予定の行を足しました。');
 });
 
 document.getElementById('btnRoutineBack').addEventListener('click', () => show('report'));
 
 document.getElementById('btnRoutineSave').addEventListener('click', async () => {
   const btn = document.getElementById('btnRoutineSave');
+  if (isBusy(btn)) return;
   clearError(routineMsg);
 
   const routines = Array.from(document.querySelectorAll('#routineEditList .rtrow'))
@@ -1170,6 +1390,8 @@ document.getElementById('btnRoutineSave').addEventListener('click', async () => 
       renderRoutineChecks();
       updateBikoPreview();
       show('report');
+      setTimeout(() => announce('いつもの予定を'
+        + currentRoutines.length + '件で保存しました。'), 500);
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else if (r.error === 'too_many') {
@@ -1257,12 +1479,14 @@ function renderHistory(days) {
 
 document.getElementById('btnHistory').addEventListener('click', async () => {
   const btn = document.getElementById('btnHistory');
+  if (isBusy(btn)) return;
   clearError(historyMsg);
   document.getElementById('historyBody').innerHTML =
     '<p class="hint" style="text-align:center;">読み込んでいます…</p>';
   show('history');
+  announce('読み込んでいます');
 
-  btn.disabled = true;
+  btn.dataset.busy = '1';
   try {
     const r = await callApiRetry({
       action: 'history',
@@ -1272,6 +1496,9 @@ document.getElementById('btnHistory').addEventListener('click', async () => {
 
     if (r.ok) {
       renderHistory(r.days);
+      announce(r.days && r.days.length
+        ? r.days.length + '日分の報告を表示しました。'
+        : 'まだ報告がありません。');
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else {
@@ -1282,7 +1509,7 @@ document.getElementById('btnHistory').addEventListener('click', async () => {
     document.getElementById('historyBody').innerHTML = '';
     showError(historyMsg, '通信に失敗しました。電波の状態を確認して、もう一度お試しください。');
   } finally {
-    btn.disabled = false;
+    delete btn.dataset.busy;
   }
 });
 
