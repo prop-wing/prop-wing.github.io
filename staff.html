@@ -409,6 +409,49 @@
     background: #eef1f4; border: 1px solid var(--line); color: var(--text);
   }
 
+  /* ===== 代理入力のダイアログ ===== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 26, 33, 0.55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px;
+    overflow-y: auto;
+    z-index: 100;
+  }
+  .dlg {
+    width: 100%;
+    max-width: 560px;
+    margin: auto;
+  }
+  .dlg .row { display: flex; gap: 10px; margin-top: 20px; }
+  .dlg .row .btn-main { margin-top: 0; }
+  .dlg .row .btn-small { flex: 0 0 auto; }
+
+  /* 区分・体調は見た目はボタン、中身はラジオボタン。
+     利用者の画面(index.html)と同じ作りにしてある。
+     選択状態が読み上げられ、矢印キーで選び替えられる。 */
+  .pick { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+  .pick label {
+    display: inline-block;
+    margin: 0;
+    padding: 11px 22px;
+    font-size: 16px;
+    font-weight: 700;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .pick label:hover { background: #eef4fb; }
+  .pick label.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* ラジオ本体は見せないが、フォーカスは受け取れる場所に置いておく */
+  .pick input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .pick label:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+
   .soon {
     padding: 34px 20px;
     text-align: center;
@@ -526,6 +569,7 @@
               <th scope="col">昼等休憩</th>
               <th scope="col">訓練・作業内容</th>
               <th scope="col">返信</th>
+              <th scope="col"><span class="sr-only">代理で入力</span></th>
             </tr>
           </thead>
           <tbody id="homeTbody"></tbody>
@@ -636,6 +680,7 @@
                 <th scope="col">訓練・作業内容</th>
                 <th scope="col">備考</th>
                 <th scope="col">返信</th>
+                <th scope="col"><span class="sr-only">代理で入力</span></th>
               </tr>
             </thead>
             <tbody id="userTbody"></tbody>
@@ -651,6 +696,63 @@
         利用者と月を選んで画面で確認し、印刷とExcel出力ができるようにする予定です。</p>
     </div>
   </section>
+
+  <!-- ===== 代理で入力（職員が利用者の代わりに報告を入れる） =====
+       ★role="dialog" + aria-modal。開いたらこの中にフォーカスを閉じ込め、
+         閉じたら押したボタンにフォーカスを戻す。
+         そうしないと、読み上げの利用者は背後の表を読み続けてしまう。 -->
+  <div id="proxyOverlay" class="overlay hidden">
+    <div id="proxyDlg" class="panel dlg" role="dialog" aria-modal="true"
+         aria-labelledby="proxyTitle" tabindex="-1">
+      <h2 id="proxyTitle" class="label" style="margin-top:0;">代理で入力</h2>
+      <p class="hint" id="proxyWho"></p>
+
+      <label for="pxDate">日付</label>
+      <input type="date" id="pxDate">
+
+      <p class="label" id="lbl-pxKubun">区分</p>
+      <div class="pick" role="radiogroup" aria-labelledby="lbl-pxKubun">
+        <label data-kubun="始業"><input type="radio" name="pxKubun" value="始業">始業</label>
+        <label data-kubun="終業"><input type="radio" name="pxKubun" value="終業">終業</label>
+      </div>
+
+      <label for="pxTime">時刻</label>
+      <select id="pxTime"></select>
+
+      <div id="px-start">
+        <p class="label" id="lbl-pxTaicho">体調</p>
+        <div class="pick" role="radiogroup" aria-labelledby="lbl-pxTaicho">
+          <label data-taicho="良好"><input type="radio" name="pxTaicho" value="良好">良好</label>
+          <label data-taicho="やや不良"><input type="radio" name="pxTaicho" value="やや不良">やや不良</label>
+          <label data-taicho="不良"><input type="radio" name="pxTaicho" value="不良">不良</label>
+        </div>
+      </div>
+
+      <div id="px-end">
+        <label for="pxKyukei">昼等休憩</label>
+        <p class="hint" id="hint-pxKyukei">休んでいない場合は 0:00 を選んでください</p>
+        <select id="pxKyukei" aria-describedby="hint-pxKyukei"></select>
+
+        <label for="pxSagyo">訓練・作業内容</label>
+        <textarea id="pxSagyo" style="min-height:70px"></textarea>
+
+        <label for="pxBiko">備考</label>
+        <p class="hint" id="hint-pxBiko">他のサービスを利用した時間帯など。日報の備考欄に出ます</p>
+        <textarea id="pxBiko" style="min-height:70px" aria-describedby="hint-pxBiko"></textarea>
+      </div>
+
+      <label for="pxMemo">自由記述（任意）</label>
+      <p class="hint" id="hint-pxMemo">日報には出ません</p>
+      <textarea id="pxMemo" style="min-height:60px" aria-describedby="hint-pxMemo"></textarea>
+
+      <div id="proxyMsg" class="msg msg-error hidden"></div>
+
+      <div class="row">
+        <button type="button" id="pxSend" class="btn-main">記録する</button>
+        <button type="button" id="pxCancel" class="btn-small">やめる</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -902,6 +1004,7 @@ const loaded = { home: false, list: false, month: false };
 const stale  = { home: false, list: false, month: false };
 
 let mainTabs = null, attendTabs = null, activeSub = 'sub-date';
+let activeMain = 'tab-home';
 
 function enterApp() {
   document.getElementById('who').textContent = staffName + ' さん';
@@ -915,6 +1018,7 @@ function enterApp() {
 }
 
 function onMainTab(id) {
+  activeMain = id;
   if (id === 'tab-home' && (!loaded.home || stale.home)) loadHome();
   if (id === 'tab-attend') onAttendTab(activeSub);
 }
@@ -1049,7 +1153,7 @@ function renderHome(quiet) {
   if (!rows.length) {
     const tr = document.createElement('tr');
     const c  = td('ウィング利用者シートに名前がありません。');
-    c.colSpan = 7;
+    c.colSpan = 8;
     tr.appendChild(c);
     tb.appendChild(tr);
   }
@@ -1100,6 +1204,15 @@ function renderHome(quiet) {
       });
     }
     tr.appendChild(rc);
+
+    /* ★足りない報告があれば、その場で代理入力に入れるようにする。
+       抜けが見えている場所から埋められるのがいちばん確実。 */
+    const ac = document.createElement('td');
+    if (!x.start || !x.end) {
+      ac.appendChild(proxyButton(x.name, ymdOf(new Date()),
+                                 x.start ? '終業' : '始業', '本日'));
+    }
+    tr.appendChild(ac);
 
     tb.appendChild(tr);
   });
@@ -1483,6 +1596,16 @@ function renderUser(quiet) {
     tagsInto(rc, marks);
     tr.appendChild(rc);
 
+    // 報告が抜けている日は、その日のぶんを代理で入れられるようにする
+    const ac = document.createElement('td');
+    if (countable && !(hasS && hasE)) {
+      ac.appendChild(proxyButton(u.name,
+        r.ym + '-' + ('0' + day.d).slice(-2),
+        hasS ? '終業' : '始業',
+        day.d + '日'));
+    }
+    tr.appendChild(ac);
+
     tb.appendChild(tr);
   });
 
@@ -1504,6 +1627,273 @@ document.getElementById('ym2').addEventListener('change', () => {
 });
 // 利用者を変えるだけなら、もう手元にあるデータで描き直すだけでよい
 document.getElementById('userSel').addEventListener('change', () => renderUser());
+
+/* =====================================================================
+ * 代理で入力（職員が利用者の代わりに報告を入れる）
+ * ---------------------------------------------------------------------
+ * 電話連絡や報告忘れに対応するため(2026-08-18にユーザーが決定)。
+ * ★入口は「抜けが見えている場所」に置いてある。
+ *   ・メイン画面「本日の状況」の、始業か終業が足りない行
+ *   ・「利用者ごとに見る」の、報告が抜けている日の行
+ *   探しに行かなくても、気づいたその場で埋められるようにするため。
+ * =================================================================== */
+const proxyMsg = document.getElementById('proxyMsg');
+let proxyTrigger = null;      // 閉じたときにフォーカスを戻す先
+let proxyName    = '';
+let pxKubun      = '始業';
+let pxTaicho     = '';
+let pxReqId      = null;      // 二重登録を防ぐ引換番号
+
+function ymdOf(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2)
+       + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+/* '2026-08-13' → '8月13日（木）'。読み上げ用。 */
+function jpDate(ymd) {
+  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(ymd || '');
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number(m[2]) + '月' + Number(m[3]) + '日（'
+       + ['日','月','火','水','木','金','土'][d.getDay()] + '）';
+}
+
+/* 時刻と昼等休憩の選択肢。利用者の画面(index.html)と同じ中身にしてある。 */
+(function buildPxOptions() {
+  const t = [];
+  for (let m = 9 * 60 + 30; m <= 17 * 60; m += 15) {
+    t.push(Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2));
+  }
+  document.getElementById('pxTime').innerHTML =
+    t.map(v => '<option value="' + v + '">' + v + '</option>').join('');
+
+  const k = [];
+  for (let m = 0; m <= 120; m += 15) {
+    k.push(Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2));
+  }
+  /* 初期値は空。うっかり違う時間のまま送られると
+     日報の「時間数」がそのまま狂うため(利用者の画面と同じ考え方)。 */
+  document.getElementById('pxKyukei').innerHTML =
+    '<option value="">選んでください</option>'
+    + k.map(v => '<option value="' + v + '">' + v + '</option>').join('');
+})();
+
+/* 見た目はボタン、中身はラジオボタン。選択中の色付けはここで行う。 */
+function pxPaint(groupId, attr, value) {
+  const box = document.querySelector('#proxyDlg .pick[aria-labelledby="' + groupId + '"]');
+  if (!box) return;
+  box.querySelectorAll('input').forEach(r => { r.checked = (r.value === value); });
+  box.querySelectorAll('label').forEach(l => { l.classList.toggle('on', l.dataset[attr] === value); });
+}
+
+function setPxKubun(k) {
+  pxKubun = k;
+  pxPaint('lbl-pxKubun', 'kubun', k);
+  document.getElementById('px-start').classList.toggle('hidden', k !== '始業');
+  document.getElementById('px-end').classList.toggle('hidden', k !== '終業');
+  document.getElementById('pxTime').value = (k === '始業') ? '9:30' : '16:30';
+}
+
+function setPxTaicho(t) {
+  pxTaicho = t;
+  pxPaint('lbl-pxTaicho', 'taicho', t);
+}
+
+document.querySelectorAll('input[name="pxKubun"]').forEach(r => {
+  r.addEventListener('change', () => {
+    setPxKubun(r.value);
+    announce(r.value === '始業'
+      ? '始業を選びました。入力するのは、時刻と体調です。'
+      : '終業を選びました。入力するのは、時刻、昼等休憩、訓練・作業内容、備考です。');
+  });
+});
+document.querySelectorAll('input[name="pxTaicho"]').forEach(r => {
+  r.addEventListener('change', () => setPxTaicho(r.value));
+});
+
+/* ダイアログの中だけでTabが回るようにする。
+ * ★これをやらないと、読み上げの利用者はTabで背後の表へ抜けてしまい、
+ *   自分がどこにいるのか分からなくなる。 */
+function pxFocusables() {
+  const dlg = document.getElementById('proxyDlg');
+  return Array.from(dlg.querySelectorAll('a[href],button,input,select,textarea'))
+    .filter(x => !x.disabled && x.offsetParent !== null);
+}
+
+document.getElementById('proxyDlg').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.preventDefault(); closeProxy(true); return; }
+  if (e.key !== 'Tab') return;
+  const f = pxFocusables();
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+function openProxy(opt, trigger) {
+  proxyTrigger = trigger || document.activeElement;
+  proxyName = opt.name;
+  pxReqId = null;
+  clearError(proxyMsg);
+
+  document.getElementById('proxyTitle').textContent = opt.name + ' さんの報告を代理で入力';
+  document.getElementById('proxyWho').textContent =
+    staffName + ' さんが代わりに入力します。あとで「誰が入れたか」が分かるように記録されます。';
+
+  const today = new Date();
+  const oldest = new Date(today.getTime());
+  oldest.setDate(oldest.getDate() - 62);
+  const d = document.getElementById('pxDate');
+  d.min = ymdOf(oldest);
+  d.max = ymdOf(today);
+  d.value = opt.ymd || ymdOf(today);
+
+  setPxKubun(opt.kubun || '始業');
+  setPxTaicho('');
+  document.getElementById('pxKyukei').value = '';
+  ['pxSagyo', 'pxBiko', 'pxMemo'].forEach(id => { document.getElementById(id).value = ''; });
+
+  document.getElementById('proxyOverlay').classList.remove('hidden');
+  document.getElementById('proxyDlg').focus();
+  announce(opt.name + 'さんの報告を代理で入力します。'
+    + '日付は' + jpDate(d.value) + '、区分は' + pxKubun + 'です。');
+}
+
+function closeProxy(speak) {
+  document.getElementById('proxyOverlay').classList.add('hidden');
+  clearError(proxyMsg);
+  // ★押したボタンにフォーカスを戻す。戻さないと読み上げが行き場を失う。
+  if (proxyTrigger && document.body.contains(proxyTrigger)) proxyTrigger.focus();
+  proxyTrigger = null;
+  if (speak) announce('代理入力をやめました。');
+}
+
+document.getElementById('pxCancel').addEventListener('click', () => closeProxy(true));
+
+const PX_ERR = {
+  bad_name:       'この利用者が名簿に見つかりませんでした。ウィング利用者シートを確認してください。',
+  future_target:  '未来の日付は選べません。',
+  too_old_target: '古すぎる日付です。さかのぼれるのは2ヶ月前までです。',
+  bad_target:     '日付を選び直してください。',
+  bad_kubun:      '区分を選んでください。',
+  bad_time:       '時刻を選んでください。',
+  bad_taicho:     '体調を選んでください。',
+  bad_kyukei:     '昼等休憩を選んでください。',
+  bad_sagyo:      '訓練・作業内容を入力してください。'
+};
+
+async function sendProxy() {
+  const btn = document.getElementById('pxSend');
+  if (isBusy(btn)) return;
+  clearError(proxyMsg);
+
+  const target = document.getElementById('pxDate').value;
+  const time   = document.getElementById('pxTime').value;
+  const kyukei = document.getElementById('pxKyukei').value;
+  const sagyo  = document.getElementById('pxSagyo').value.trim();
+  const biko   = document.getElementById('pxBiko').value.trim();
+  const memo   = document.getElementById('pxMemo').value.trim();
+
+  // 足りない欄までフォーカスを連れて行く
+  if (!target) {
+    showError(proxyMsg, '日付を選んでください。');
+    document.getElementById('pxDate').focus();
+    return;
+  }
+  if (pxKubun === '始業' && !pxTaicho) {
+    showError(proxyMsg, '体調を選んでください。');
+    document.querySelector('input[name="pxTaicho"]').focus();
+    return;
+  }
+  if (pxKubun === '終業' && !kyukei) {
+    showError(proxyMsg, '昼等休憩を選んでください。休んでいない場合は 0:00 を選んでください。');
+    document.getElementById('pxKyukei').focus();
+    return;
+  }
+  if (pxKubun === '終業' && !sagyo) {
+    showError(proxyMsg, '訓練・作業内容を入力してください。');
+    document.getElementById('pxSagyo').focus();
+    return;
+  }
+
+  if (!pxReqId) pxReqId = newReqId();
+
+  setBusy(btn, '記録しています…');
+  try {
+    const r = await callApiRetry({
+      action: 'staffReport',
+      token:  token(),
+      reqId:  pxReqId,
+      name:   proxyName,
+      target: target,
+      kubun:  pxKubun,
+      time:   time,
+      taicho: pxTaicho,
+      kyukei: kyukei,
+      sagyo:  sagyo,
+      biko:   biko,
+      memo:   memo
+    }, 2, 'uid');
+
+    if (r.ok) {
+      pxReqId = null;
+      const who = r.name || proxyName;
+      closeProxy(false);
+      /* ★読み上げは afterProxySaved に任せる。
+         ここで喋らせても、そのあとの一覧の読み直しで上書きされてしまう。 */
+      afterProxySaved(who + 'さんの' + jpDate(r.target || target) + 'の' + pxKubun
+        + '、' + time + ' を'
+        + (r.updated ? '書き直しました。' : '記録しました。'));
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      showError(proxyMsg, PX_ERR[r.error] || '記録できませんでした。入力内容を確認して、もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(proxyMsg, '記録できたかどうか確認できませんでした。'
+      + 'いったん「やめる」を押し、「更新」で確かめてください。'
+      + 'もう一度送っても、同じ報告が二重に登録されることはありません。');
+  } finally {
+    setIdle(btn, '記録する');
+  }
+}
+
+document.getElementById('pxSend').addEventListener('click', sendProxy);
+
+/* 記録したあと、いま見ている画面だけ読み直す。
+ * ほかの画面は印を付けておいて、開いたときに読み直させる。 */
+async function afterProxySaved(message) {
+  stale.home = stale.list = stale.month = true;
+
+  let p;
+  if (activeMain === 'tab-home') p = loadHome();
+  else if (activeSub === 'sub-month' || activeSub === 'sub-user') p = loadMonth();
+  else p = loadList();
+  await p;
+
+  /* ★表をまるごと作り直すので、押していたボタンごとフォーカスが消える。
+     いま見ている画面そのものに戻して、読み上げの位置を作り直す。 */
+  const panel = document.getElementById(
+    activeMain === 'tab-home'   ? 'panel-home' :
+    activeMain === 'tab-attend' ? 'panel-attend' : 'panel-nippo');
+  if (panel) panel.focus({ preventScroll: true });
+
+  /* 一覧の読み直しも読み上げるので、少し待ってから結果を言う。
+     待たないと、こちらが先に流れて件数の読み上げに消される。 */
+  if (message) setTimeout(() => announce(message), 300);
+}
+
+/* 表の中に置く「代理で入力」ボタンを作る */
+function proxyButton(name, ymd, kubun, whenLabel) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mini';
+  b.textContent = '代理で入力';
+  b.setAttribute('aria-label',
+    name + 'さんの' + whenLabel + 'の' + kubun + 'を代理で入力');
+  b.addEventListener('click', () => openProxy({ name: name, ymd: ymd, kubun: kubun }, b));
+  return b;
+}
 
 /* =====================================================================
  * 報告カード（メイン画面と一覧の両方で使う）

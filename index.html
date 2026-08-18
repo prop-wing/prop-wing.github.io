@@ -492,9 +492,10 @@
     <!-- ★いつの報告かを選ぶ(2026-08-18に追加)。
          ふだんは「本日」のまま。報告を忘れた日があとから出せるように、
          7日前まで選べるようにしてある。 -->
-    <label for="target">いつの報告ですか</label>
-    <p class="hint" id="hint-target">ふだんは「本日」のままで大丈夫です。報告を忘れた日があれば、その日を選んでください。</p>
-    <select id="target" aria-describedby="hint-target"></select>
+    <!-- ★見える文字は置かない(2026-08-18にユーザーの指示)。
+         ただし読み上げには名前が要るので aria-label に移してある。
+         これが無いと「コンボボックス」としか読まれない。 -->
+    <select id="target" aria-label="いつの報告ですか"></select>
     <p class="hint hidden" id="targetNote"></p>
 
     <!-- すでに報告したかどうか。
