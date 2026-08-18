@@ -489,11 +489,19 @@
     <p id="greet" class="greet"></p>
     <p id="today" class="today"></p>
 
-    <!-- 本日すでに報告したかどうか。
+    <!-- ★いつの報告かを選ぶ(2026-08-18に追加)。
+         ふだんは「本日」のまま。報告を忘れた日があとから出せるように、
+         7日前まで選べるようにしてある。 -->
+    <label for="target">いつの報告ですか</label>
+    <p class="hint" id="hint-target">ふだんは「本日」のままで大丈夫です。報告を忘れた日があれば、その日を選んでください。</p>
+    <select id="target" aria-describedby="hint-target"></select>
+    <p class="hint hidden" id="targetNote"></p>
+
+    <!-- すでに報告したかどうか。
          「送れたか分からない」不安をなくすのが目的なので、
          入力欄より先、画面を開いてすぐ目に入る位置に置く。
          見出しを付けてあるのは、読み上げでここに直接飛べるようにするため。 -->
-    <h3 class="sr-only">本日の報告状況</h3>
+    <h3 class="sr-only" id="h-status">本日の報告状況</h3>
     <div class="today-status" id="todayStatus">
       <div class="row">
         <span class="k">始業</span>
@@ -851,7 +859,7 @@ async function doLogin() {
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
-      enterReport(r.name, r.today, r.sagyoList, r.routines);
+      enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
       document.getElementById('userNo').focus();
@@ -880,6 +888,12 @@ let currentName = '';
 let currentKubun = '';
 let currentTaicho = '';
 let currentToday = { start: '', end: '' };
+
+/* ★いつの報告か(2026-08-18に追加)。
+ * currentRecent はサーバーから受け取った直近8日ぶんの状況。
+ * 日を切り替えても、ここから引くだけなので通信しない。 */
+let currentRecent = [];
+let currentTarget = '';        // 'yyyy-MM-dd'。空なら本日
 const reportMsg = document.getElementById('reportMsg');
 
 /* 二重登録を防ぐための引換番号。
@@ -913,6 +927,67 @@ function renderReplies(el, replies) {
   });
 }
 
+/* 選ばれている日の情報。見つからなければ本日のぶんを返す。 */
+function targetEntry() {
+  const hit = currentRecent.filter(x => x.ymd === currentTarget)[0];
+  return hit || currentRecent[0] || { ymd: '', label: '', start: '', end: '', holiday: '' };
+}
+
+function targetDate() {
+  const m = String(currentTarget || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date();
+}
+
+function isToday() {
+  return !currentRecent.length || currentTarget === currentRecent[0].ymd;
+}
+
+/* 日のプルダウンを作る。先頭が本日。 */
+function renderTargetOptions() {
+  const sel = document.getElementById('target');
+  sel.innerHTML = '';
+  currentRecent.forEach((x, i) => {
+    const o = document.createElement('option');
+    o.value = x.ymd;
+    o.textContent = (i === 0 ? '本日（' + x.label + '）' : x.label)
+      + (x.holiday ? '　※休業日' : '');
+    sel.appendChild(o);
+  });
+  sel.value = currentTarget;
+}
+
+/* 選んだ日に画面を合わせる。通信はしない。 */
+function applyTarget(ymd, speak) {
+  currentTarget = ymd || (currentRecent[0] ? currentRecent[0].ymd : '');
+  const sel = document.getElementById('target');
+  if (sel.value !== currentTarget) sel.value = currentTarget;
+
+  const e = targetEntry();
+  const d = targetDate();
+  const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+  document.getElementById('today').textContent =
+    d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + week + '）'
+    + (isToday() ? '' : ' の報告');
+
+  document.getElementById('h-status').textContent =
+    (isToday() ? '本日' : e.label) + 'の報告状況';
+
+  // 休業日や、本日でない日を選んでいることをはっきり出す
+  const note = document.getElementById('targetNote');
+  const msgs = [];
+  if (!isToday()) msgs.push('本日ではなく ' + e.label + ' の報告として記録されます。');
+  if (e.holiday)  msgs.push('この日は休業日です（' + e.holiday + '）。');
+  note.textContent = msgs.join('');
+  note.classList.toggle('hidden', msgs.length === 0);
+
+  renderTodayStatus(e);
+  renderRoutineChecks();        // 曜日が変わると「いつもの予定」も変わる
+  updateBikoPreview();
+  setKubun(currentKubun || '始業');   // 報告済みの案内を選んだ日で出し直す
+
+  if (speak) announce(e.label + 'の報告に切り替えました。' + todayStatusSentence());
+}
+
 function renderTodayStatus(today) {
   currentToday = today || { start: '', end: '' };
   [['start', 'ts-start'], ['end', 'ts-end']].forEach(([key, id]) => {
@@ -944,7 +1019,8 @@ function todayStatusSentence() {
     return label + 'は' + (t ? t + 'に報告済み' : 'まだ報告していません')
       + (reps ? '、職員からの返信が' + reps + '件あります' : '');
   };
-  return '本日の状況。' + part('始業', 'start') + '。' + part('終業', 'end') + '。';
+  const head = isToday() ? '本日の状況。' : targetEntry().label + 'の状況。';
+  return head + part('始業', 'start') + '。' + part('終業', 'end') + '。';
 }
 
 /* 本人が前に書いた訓練・作業内容をボタンで並べる。
@@ -984,7 +1060,8 @@ function renderSagyoSuggest(list) {
 let currentRoutines = [];      // 本人の全曜日ぶん
 
 function todayRoutines() {
-  const w = WEEK_JP[new Date().getDay()];
+  // ★選んだ日の曜日で絞る。過去の日を報告するときも、その日の予定が出る。
+  const w = WEEK_JP[targetDate().getDay()];
   return currentRoutines.filter(r => r.day === w);
 }
 
@@ -992,7 +1069,7 @@ function renderRoutineChecks() {
   const wrap = document.getElementById('routineWrap');
   const list = document.getElementById('routineList');
   const mine = todayRoutines();
-  const day  = WEEK_JP[new Date().getDay()];
+  const day  = WEEK_JP[targetDate().getDay()];
 
   document.getElementById('routineDay').textContent = day;
   // 見えている文字と読み上げを合わせる(何曜日の予定なのかが分かるように)
@@ -1050,17 +1127,28 @@ function bikoSentence() {
     : '備考は記入なしです。';
 }
 
-function enterReport(name, today, sagyoList, routines) {
+function enterReport(name, today, sagyoList, routines, recent) {
   currentName = name;
-  renderTodayStatus(today);
   if (sagyoList !== undefined) renderSagyoSuggest(sagyoList);
   if (routines  !== undefined) currentRoutines = routines || [];
+  if (recent    !== undefined && recent) currentRecent = recent;
   document.getElementById('greet').textContent = name + ' さん';
 
-  const d = new Date();
-  const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-  document.getElementById('today').textContent =
-    `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${week}）`;
+  /* サーバーが直近8日ぶんを返してくれない古い応答でも動くようにしておく。
+     その場合は本日1日ぶんだけの一覧を自分で作る。 */
+  if (!currentRecent.length) {
+    const d0 = new Date();
+    const w0 = ['日', '月', '火', '水', '木', '金', '土'][d0.getDay()];
+    const t  = today || { start: '', end: '' };
+    currentRecent = [{
+      ymd: d0.getFullYear() + '-' + ('0' + (d0.getMonth() + 1)).slice(-2)
+         + '-' + ('0' + d0.getDate()).slice(-2),
+      label: (d0.getMonth() + 1) + '月' + d0.getDate() + '日（' + w0 + '）',
+      start: t.start || '', end: t.end || '',
+      startReplies: t.startReplies || [], endReplies: t.endReplies || [], holiday: ''
+    }];
+  }
+  renderTargetOptions();
 
   selectNearestTime(timeList);
   document.getElementById('memo').value   = '';
@@ -1075,7 +1163,10 @@ function enterReport(name, today, sagyoList, routines) {
 
   // 午前なら始業、午後なら終業を初期選択にしておく。
   // 報告済みの案内を出すことがあるので、clearError より後に呼ぶこと。
-  setKubun(d.getHours() < 12 ? '始業' : '終業');
+  const now = new Date();
+  setKubun(now.getHours() < 12 ? '始業' : '終業');
+  // 日は必ず本日から始める。過去の日は本人が選んだときだけ。
+  applyTarget(currentRecent[0] ? currentRecent[0].ymd : '', false);
   show('report');
 
   /* 本日の状況を読み上げる。画面を開いた人がいちばん知りたいこと。
@@ -1119,8 +1210,11 @@ function setKubun(k) {
   // 訂正したい場合もあるので、止めはせず案内だけにする。
   const already = (k === '始業') ? currentToday.start : currentToday.end;
   if (already) {
-    showCaution(reportMsg, '本日の' + k + 'は ' + already + ' に報告済みです。'
-      + 'このまま送信すると、もう1件記録されます。');
+    /* ★2026-08-18から、同じ日の同じ区分を送り直すと前の報告を書き直す。
+       行が2件になることはないので、文言もそれに合わせてある。 */
+    showCaution(reportMsg, (isToday() ? '本日' : targetEntry().label) + 'の' + k
+      + 'は ' + already + ' に報告済みです。'
+      + 'このまま送信すると、前の報告を書き直します。');
   } else {
     clearError(reportMsg);
   }
@@ -1161,11 +1255,13 @@ function finishSent(r, f) {
   pendingReqId = null;
   // サーバーが返す最新の状況を覚えておく。
   // 「続けて報告する」で戻ったとき、いま出した分が反映されている。
-  currentToday = r.today || currentToday;
+  if (r.recent) currentRecent = r.recent;
+  currentToday = targetEntry();
   if (r.sagyoList) renderSagyoSuggest(r.sagyoList);
   if (r.routines)  currentRoutines = r.routines;
   renderSummary([
     ['名前', r.name || currentName],
+    ['日付', targetEntry().label],
     ['区分', f.kubun],
     ['時刻', f.time],
     ['体調', f.taicho],
@@ -1177,7 +1273,8 @@ function finishSent(r, f) {
   show('done');
   // 画面の見出し「送信しました」はフォーカス移動で読まれる。
   // 何を送ったのかまで言い添えて、確かめ直さなくて済むようにする。
-  setTimeout(() => announce(f.kubun + '、' + f.time + ' の報告を送信しました。'), 500);
+  setTimeout(() => announce(targetEntry().label + 'の' + f.kubun + '、' + f.time
+    + ' の報告を送信しました。'), 500);
 }
 
 /* ★送れたかどうかをサーバーに聞きに行く(2026-08-13追加)。
@@ -1250,7 +1347,8 @@ document.getElementById('btnSend').addEventListener('click', async () => {
     const payload = Object.assign({
       action: 'report',
       token: localStorage.getItem(TOKEN_KEY),
-      reqId: pendingReqId
+      reqId: pendingReqId,
+      target: currentTarget        // いつの報告か。空なら本日
     }, fields);
 
     const r = await callApiRetry(payload, 2, 'uid');
@@ -1279,9 +1377,14 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday));
+document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday, undefined, undefined, currentRecent));
 
 document.getElementById('biko').addEventListener('input', updateBikoPreview);
+
+document.getElementById('target').addEventListener('change', e => {
+  clearError(reportMsg);
+  applyTarget(e.target.value, true);
+});
 
 /* --- いつもの予定の登録画面 -------------------------------------------- */
 const routineMsg = document.getElementById('routineMsg');
@@ -1539,7 +1642,7 @@ buildKyukeiOptions();
   show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
     const r = await callApiRetry({ action: 'me', token }, 2, 'name');
-    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines); return; }
+    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent); return; }
     // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');
