@@ -19,6 +19,9 @@
     --error:     #b3261e;
     --error-bg:  #fdecea;
     --ok:        #1b7f4b;
+    --warn:      #8a4014;
+    --warn-bg:   #fdf3e7;
+    --warn-line: #e0a771;
   }
 
   * { box-sizing: border-box; }
@@ -33,7 +36,10 @@
     line-height: 1.7;
   }
 
-  .wrap { max-width: 760px; margin: 0 auto; }
+  /* PCで見るのが主なので、表が横に伸びられるだけの幅をとる。
+     ログイン画面だけは幅を絞る(.narrow)。 */
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  .narrow { max-width: 460px; margin-left: auto; margin-right: auto; }
 
   h1 { font-size: 22px; text-align: center; margin: 8px 0 4px; }
   .sub { text-align: center; color: var(--muted); font-size: 14px; margin: 0 0 20px; }
@@ -63,15 +69,16 @@
     border: 0;
   }
 
-  /* 画面を切り替えたとき、その画面そのものにフォーカスを移す。
+  /* 画面やタブを切り替えたとき、その中身そのものにフォーカスを移す。
      読み上げの開始位置を作るためだけなので、枠は出さない。 */
-  section[tabindex="-1"]:focus { outline: none; }
+  section[tabindex="-1"]:focus,
+  div[role="tabpanel"]:focus { outline: none; }
 
   label, .label { display: block; font-weight: 700; margin: 18px 0 6px; }
   .panel > *:first-child { margin-top: 0; }
   .hint { font-weight: 400; font-size: 14px; color: var(--muted); margin: -2px 0 8px; }
 
-  input[type="text"], input[type="password"], select, textarea {
+  input[type="text"], input[type="password"], input[type="date"], select, textarea {
     width: 100%;
     padding: 12px;
     font-size: 17px;
@@ -138,8 +145,153 @@
   .msg { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 700; }
   .msg-error { background: var(--error-bg); color: var(--error); border: 2px solid var(--error); }
   .msg-wait  { background: #eef4fb; color: var(--accent-dk); border: 2px solid #b9d2ee; font-weight: 400; }
+  .msg-info  { background: var(--warn-bg); color: var(--warn); border: 2px solid var(--warn-line); font-weight: 400; }
 
-  /* 一覧の上のバー */
+  /* ===== 上の帯（職員名とログアウト） ===== */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .topbar .who { font-weight: 700; margin-right: auto; }
+  .topbar .linkbtn { display: inline; width: auto; margin: 0; padding: 4px 8px; }
+
+  /* ===== タブ ===== */
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 2px solid var(--line);
+    margin-bottom: 18px;
+  }
+  .tabs button {
+    padding: 11px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    background: none;
+    border: none;
+    border-bottom: 4px solid transparent;
+    border-radius: 8px 8px 0 0;
+    color: var(--muted);
+    margin-bottom: -2px;
+  }
+  .tabs button:hover { background: #e4e9ef; color: var(--text); }
+  .tabs button[aria-selected="true"] {
+    color: var(--accent-dk);
+    border-bottom-color: var(--accent);
+    background: var(--panel);
+  }
+
+  /* ページの中でさらに切り替える小さいタブ */
+  .subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+  }
+  .subtabs button {
+    padding: 7px 16px;
+    font-size: 15px;
+    font-weight: 700;
+    background: #fff;
+    border: 2px solid var(--line);
+    color: var(--muted);
+    border-radius: 999px;
+  }
+  .subtabs button:hover { background: #eef4fb; }
+  .subtabs button[aria-selected="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  /* ===== メイン画面の大きな数字 ===== */
+  .tiles { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 22px; }
+  .tile {
+    flex: 1 1 220px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: #fff;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .tile .num { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .tile .lbl { font-size: 15px; font-weight: 700; }
+  .tile .sub2 { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: auto; }
+  .tile.alert { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+  .tile.calm  { background: #e7f3ec; border-color: #9ccbb0; color: var(--ok); }
+
+  /* ===== 表 ===== */
+  .tablewrap { overflow-x: auto; margin-bottom: 8px; }
+  table.grid {
+    border-collapse: collapse;
+    width: 100%;
+    background: #fff;
+    font-size: 15px;
+  }
+  table.grid th, table.grid td {
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.grid thead th {
+    background: #e4e9ef;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  /* 名前は <th scope="row"> にしてあるので、td だけを指定すると当たらない */
+  table.grid tbody th.nm { font-weight: 700; white-space: nowrap; background: #fff; }
+  table.grid tr.none th, table.grid tr.none td { background: #fbfbfc; color: var(--muted); }
+  table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .tag {
+    display: inline-block;
+    padding: 1px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .tag.yet  { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); }
+  .tag.done { background: #e7f3ec; color: var(--ok);  border: 1px solid #9ccbb0; }
+  .tag.none { background: #f1f3f4; color: var(--muted); border: 1px solid var(--line); }
+
+  h2.sec { font-size: 17px; margin: 26px 0 10px; padding-bottom: 4px; border-bottom: 2px solid var(--line); }
+
+  /* 報告が抜けている日。休業日(.none)より強く出す。 */
+  table.grid tr.miss th, table.grid tr.miss td { background: var(--warn-bg); }
+  table.grid td.wrap { white-space: pre-wrap; word-break: break-word; min-width: 12em; }
+  table.grid td.day  { white-space: nowrap; }
+
+  .usum {
+    font-weight: 700;
+    font-size: 17px;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+  }
+  .usum .sep { color: var(--muted); font-weight: 400; margin: 0 10px; }
+  .usum .warn { color: var(--warn); }
+
+  /* 表の中に置く小さいボタン */
+  table.grid button.mini {
+    padding: 4px 12px;
+    font-size: 13px;
+    background: #fff;
+    border: 2px solid var(--accent);
+    color: var(--accent-dk);
+    white-space: nowrap;
+  }
+  table.grid button.mini:hover { background: #eef4fb; }
+
+  /* ===== 一覧の上のバー ===== */
   .bar {
     display: flex;
     flex-wrap: wrap;
@@ -148,7 +300,8 @@
     margin-bottom: 16px;
   }
   .bar .who { font-weight: 700; margin-right: auto; }
-  .bar select { width: auto; padding: 8px 10px; font-size: 15px; }
+  .bar .today { font-weight: 700; font-size: 17px; margin-right: auto; }
+  .bar select, .bar input[type="date"] { width: auto; padding: 8px 10px; font-size: 15px; }
   .bar label.inline {
     display: flex;
     align-items: center;
@@ -159,7 +312,7 @@
   }
   .bar input[type="checkbox"] { width: 20px; height: 20px; }
 
-  /* 報告カード */
+  /* ===== 報告カード ===== */
   .card {
     border: 1px solid var(--line);
     border-radius: 10px;
@@ -196,7 +349,7 @@
     padding: 2px 10px;
     border-radius: 999px;
   }
-  .flag.yet  { background: #fdf3e7; color: #8a4014; border: 1px solid #e0a771; }
+  .flag.yet  { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); }
   .flag.done { background: #e7f3ec; color: var(--ok);  border: 1px solid #9ccbb0; }
 
   .card .item { display: flex; gap: 10px; padding: 3px 0; font-size: 15px; }
@@ -255,13 +408,30 @@
     padding: 7px 11px; font-size: 14px; font-weight: 400;
     background: #eef1f4; border: 1px solid var(--line); color: var(--text);
   }
+
+  .soon {
+    padding: 34px 20px;
+    text-align: center;
+    color: var(--muted);
+    background: #fff;
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+  }
+
+  /* 画面が狭いときは少し詰める。作りは変えない。 */
+  @media (max-width: 700px) {
+    body { padding: 10px; }
+    table.grid { font-size: 14px; }
+    table.grid th, table.grid td { padding: 6px 7px; }
+    .tabs button { padding: 10px 13px; font-size: 15px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <h1>始業・終業報告（職員用）</h1>
-  <p class="sub">利用者からの報告を見て、その場で返信できます</p>
+  <p class="sub" id="pageSub">利用者からの報告を見て、その場で返信できます</p>
 
   <!-- ★スクリーンリーダーへの読み上げ専用の場所。
        画面が切り替わっただけでは何が起きたか伝わらないので、
@@ -271,7 +441,7 @@
   <div id="announcerAlert" class="sr-only" role="alert" aria-atomic="true"></div>
 
   <!-- ===== 読み込み中 ===== -->
-  <section id="screen-loading" class="panel hidden" tabindex="-1" aria-labelledby="h-loading">
+  <section id="screen-loading" class="panel narrow hidden" tabindex="-1" aria-labelledby="h-loading">
     <h2 id="h-loading" class="sr-only">読み込み中</h2>
     <div class="loading-box">
       <div class="spinner spinner-dark" role="presentation"></div>
@@ -280,7 +450,7 @@
   </section>
 
   <!-- ===== ログイン ===== -->
-  <section id="screen-login" class="panel hidden" tabindex="-1" aria-labelledby="h-login">
+  <section id="screen-login" class="panel narrow hidden" tabindex="-1" aria-labelledby="h-login">
     <h2 id="h-login" class="label" style="margin-top:0;">職員ログイン</h2>
 
     <label for="staffNo">職員番号</label>
@@ -300,34 +470,186 @@
     <div id="loginMsg" class="msg msg-error hidden"></div>
   </section>
 
-  <!-- ===== 一覧 ===== -->
-  <section id="screen-list" class="hidden" tabindex="-1" aria-labelledby="h-list">
-    <!-- ★sr-only にしてある。display:none だと画面の名前として使えず、
-         見出しジャンプでもここに飛べないため。 -->
-    <h2 id="h-list" class="sr-only">報告の一覧</h2>
+  <!-- ===== ログイン後の本体（タブで切り替える） ===== -->
+  <section id="screen-app" class="hidden" tabindex="-1" aria-labelledby="h-app">
+    <h2 id="h-app" class="sr-only">職員用の画面</h2>
 
-    <div class="bar">
+    <div class="topbar">
       <span class="who" id="who"></span>
-      <label class="inline" for="days">期間
-        <!-- プルダウンを label で囲んでいるので、
-             選択肢まで名前に混ざらないよう aria-label で上書きする -->
-        <select id="days" aria-label="期間">
-          <option value="1">本日</option>
-          <option value="3">3日</option>
-          <option value="7" selected>1週間</option>
-          <option value="14">2週間</option>
-        </select>
-      </label>
-      <label class="inline" for="onlyYet">
-        <input type="checkbox" id="onlyYet"> 未返信だけ
-      </label>
-      <button type="button" id="btnReload" class="btn-small">更新</button>
+      <button type="button" id="btnLogout" class="linkbtn">ログアウト</button>
     </div>
 
-    <div id="listBody"></div>
-    <div id="listMsg" class="msg msg-error hidden"></div>
+    <!-- ★タブは role="tablist"。左右の矢印キーで移動できるようにしてある。
+         選ばれていないタブは tabindex="-1" にして、Tabキーでは
+         タブの列を一度に通り抜けられるようにする(読み上げの作法)。 -->
+    <div class="tabs" role="tablist" aria-label="職員用の画面">
+      <button type="button" role="tab" id="tab-home"
+              aria-controls="panel-home"   aria-selected="true">メイン</button>
+      <button type="button" role="tab" id="tab-attend"
+              aria-controls="panel-attend" aria-selected="false" tabindex="-1">始業・終業管理</button>
+      <button type="button" role="tab" id="tab-nippo"
+              aria-controls="panel-nippo"  aria-selected="false" tabindex="-1">日報</button>
+    </div>
 
-    <button type="button" id="btnLogout" class="linkbtn">ログアウト</button>
+    <!-- ---------- メイン（本日のダッシュボード） ---------- -->
+    <div id="panel-home" role="tabpanel" tabindex="-1" aria-labelledby="tab-home">
+      <div class="bar">
+        <span class="today" id="homeDate">本日</span>
+        <button type="button" id="btnHomeReload" class="btn-small">更新</button>
+      </div>
+
+      <div id="homeHoliday" class="msg msg-info hidden"></div>
+
+      <div class="tiles" id="homeTiles">
+        <div class="tile" id="tileYet">
+          <span class="num" id="numYet">–</span>
+          <span class="lbl">未返信の報告</span>
+          <span class="sub2" id="numYetSub"></span>
+        </div>
+        <div class="tile" id="tileNo">
+          <span class="num" id="numNo">–</span>
+          <span class="lbl">未報告の利用者</span>
+          <span class="sub2">本日まだ始業がない方</span>
+        </div>
+      </div>
+
+      <h2 class="sec">本日の状況</h2>
+      <div class="tablewrap">
+        <table class="grid" id="homeTable">
+          <caption class="sr-only">本日の利用者ごとの始業・終業・返信の状況</caption>
+          <thead>
+            <tr>
+              <th scope="col">名前</th>
+              <th scope="col">始業</th>
+              <th scope="col">体調</th>
+              <th scope="col">終業</th>
+              <th scope="col">昼等休憩</th>
+              <th scope="col">訓練・作業内容</th>
+              <th scope="col">返信</th>
+            </tr>
+          </thead>
+          <tbody id="homeTbody"></tbody>
+        </table>
+      </div>
+
+      <h2 class="sec" id="h-homeYet">未返信の報告</h2>
+      <div id="homeYetBody"></div>
+
+      <div id="homeMsg" class="msg msg-error hidden"></div>
+    </div>
+
+    <!-- ---------- 始業・終業管理 ---------- -->
+    <div id="panel-attend" role="tabpanel" tabindex="-1" aria-labelledby="tab-attend" class="hidden">
+      <div class="subtabs" role="tablist" aria-label="始業・終業管理の見方">
+        <button type="button" role="tab" id="sub-date"
+                aria-controls="view-date"  aria-selected="true">日付で見る</button>
+        <button type="button" role="tab" id="sub-month"
+                aria-controls="view-month" aria-selected="false" tabindex="-1">月次で見る</button>
+        <button type="button" role="tab" id="sub-user"
+                aria-controls="view-user"  aria-selected="false" tabindex="-1">利用者ごとに見る</button>
+      </div>
+
+      <!-- 日付で見る（返信もここから） -->
+      <div id="view-date" role="tabpanel" tabindex="-1" aria-labelledby="sub-date">
+        <div class="bar">
+          <label class="inline" for="days">期間
+            <!-- プルダウンを label で囲んでいるので、
+                 選択肢まで名前に混ざらないよう aria-label で上書きする -->
+            <select id="days" aria-label="期間">
+              <option value="1">本日</option>
+              <option value="3">3日</option>
+              <option value="7" selected>1週間</option>
+              <option value="14">2週間</option>
+              <option value="31">1ヶ月</option>
+            </select>
+          </label>
+          <label class="inline" for="onlyYet">
+            <input type="checkbox" id="onlyYet"> 未返信だけ
+          </label>
+          <button type="button" id="btnReload" class="btn-small">更新</button>
+        </div>
+
+        <div id="listBody"></div>
+        <div id="listMsg" class="msg msg-error hidden"></div>
+      </div>
+
+      <!-- 月次で見る -->
+      <div id="view-month" role="tabpanel" tabindex="-1" aria-labelledby="sub-month" class="hidden">
+        <div class="bar">
+          <label class="inline" for="ym">月
+            <select id="ym" aria-label="月"></select>
+          </label>
+          <span style="margin-right:auto;"></span>
+          <button type="button" id="btnMonthReload" class="btn-small">更新</button>
+        </div>
+
+        <div class="tablewrap">
+          <table class="grid" id="monthTable">
+            <caption class="sr-only">利用者ごとの、その月の利用日数・合計時間数・報告の抜け・体調</caption>
+            <thead>
+              <tr>
+                <th scope="col">名前</th>
+                <th scope="col">利用日数</th>
+                <th scope="col">合計時間数</th>
+                <th scope="col">報告の抜け</th>
+                <th scope="col">体調</th>
+                <th scope="col"><span class="sr-only">その利用者を見る</span></th>
+              </tr>
+            </thead>
+            <tbody id="monthTbody"></tbody>
+          </table>
+        </div>
+        <p class="hint">
+          「利用日数」は日報と同じ数え方で、<strong>始業（開始時間）の報告がある日</strong>を数えています。<br>
+          「報告の抜け」は、休業日をのぞいた日のうち、始業だけ・終業だけ・報告なしの日数です。今月はまだ来ていない日は数えません。
+        </p>
+        <div id="monthMsg" class="msg msg-error hidden"></div>
+      </div>
+
+      <!-- 利用者ごとに見る -->
+      <div id="view-user" role="tabpanel" tabindex="-1" aria-labelledby="sub-user" class="hidden">
+        <div class="bar">
+          <label class="inline" for="userSel">利用者
+            <select id="userSel" aria-label="利用者"></select>
+          </label>
+          <label class="inline" for="ym2">月
+            <select id="ym2" aria-label="月"></select>
+          </label>
+          <span style="margin-right:auto;"></span>
+          <button type="button" id="btnUserReload" class="btn-small">更新</button>
+        </div>
+
+        <p class="usum" id="userSummary"></p>
+
+        <div class="tablewrap">
+          <table class="grid" id="userTable">
+            <caption class="sr-only">選んだ利用者の、その月の日ごとの報告</caption>
+            <thead>
+              <tr>
+                <th scope="col">日</th>
+                <th scope="col">曜</th>
+                <th scope="col">体調</th>
+                <th scope="col">開始</th>
+                <th scope="col">終了</th>
+                <th scope="col">昼等休憩</th>
+                <th scope="col">時間数</th>
+                <th scope="col">訓練・作業内容</th>
+                <th scope="col">備考</th>
+                <th scope="col">返信</th>
+              </tr>
+            </thead>
+            <tbody id="userTbody"></tbody>
+          </table>
+        </div>
+        <div id="userMsg" class="msg msg-error hidden"></div>
+      </div>
+    </div>
+
+    <!-- ---------- 日報 ---------- -->
+    <div id="panel-nippo" role="tabpanel" tabindex="-1" aria-labelledby="tab-nippo" class="hidden">
+      <p class="soon">「日報」はこれから作ります。<br>
+        利用者と月を選んで画面で確認し、印刷とExcel出力ができるようにする予定です。</p>
+    </div>
   </section>
 
 </div>
@@ -340,6 +662,8 @@
  *   利用者の画面に職員向けの入り口を置かないため。
  * ★職員のトークンは利用者のトークンと別物で、サーバー側で区別している。
  *   利用者の番号でここにログインすることはできない。
+ *
+ * 2026-08-18: ログイン後をタブ3枚（メイン / 始業・終業管理 / 日報）にした。
  * ======================================================================= */
 const API_URL = 'https://script.google.com/macros/s/AKfycbyiTqv-ryfVZVKLH2JIn2qSJtWyTwe8l3i-8JNmDU8NoQeKUxcueg76h8MxXBMfHyAGog/exec';
 
@@ -350,8 +674,9 @@ const TIMEOUT_MS = 25000;
 const screens = {
   loading: document.getElementById('screen-loading'),
   login:   document.getElementById('screen-login'),
-  list:    document.getElementById('screen-list')
+  app:     document.getElementById('screen-app')
 };
+
 /* ★スクリーンリーダーへの読み上げ。
  * 画面の隅に置いた読み上げ専用の場所に文字を入れると読まれる。目には見えない。
  * 同じ文言を続けて入れても読み直さないので、いったん空にしてから入れる。 */
@@ -370,6 +695,53 @@ function show(which) {
   window.scrollTo(0, 0);
   const el = screens[which];
   if (el) el.focus({ preventScroll: true });
+}
+
+/* --- タブ --------------------------------------------------------------
+ * role="tablist" の作法にそろえてある。
+ *  ・左右の矢印キーでタブを移動できる（Home / End で端へ）
+ *  ・選ばれていないタブは tabindex="-1"。Tabキーではタブの列を
+ *    一度に通り抜けられるようにするため（読み上げの利用者が
+ *    毎回3つも4つもボタンを踏まずに中身へ入れる）
+ *  ・切り替えたら中身（tabpanel）にフォーカスを移して読み直させる
+ * --------------------------------------------------------------------- */
+function setupTabs(listEl, onSelect) {
+  const tabs = Array.from(listEl.querySelectorAll('[role="tab"]'));
+
+  function select(tab, moveFocus) {
+    tabs.forEach(t => {
+      const on = (t === tab);
+      t.setAttribute('aria-selected', String(on));
+      if (on) t.removeAttribute('tabindex');
+      else    t.setAttribute('tabindex', '-1');
+      const p = document.getElementById(t.getAttribute('aria-controls'));
+      if (p) p.classList.toggle('hidden', !on);
+    });
+    const panel = document.getElementById(tab.getAttribute('aria-controls'));
+    if (panel && moveFocus) panel.focus({ preventScroll: true });
+    if (onSelect) onSelect(tab.id, panel);
+  }
+
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => {
+      select(t, true);
+      announce(t.textContent + 'を開きました。');
+    });
+    t.addEventListener('keydown', e => {
+      let j = null;
+      if      (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   j = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') j = 0;
+      else if (e.key === 'End')  j = tabs.length - 1;
+      if (j === null) return;
+      e.preventDefault();
+      select(tabs[j], false);
+      tabs[j].focus();
+      announce(tabs[j].textContent + 'を開きました。');
+    });
+  });
+
+  return { select, tabs, byId: id => tabs.filter(t => t.id === id)[0] };
 }
 
 /* --- サーバーとのやりとり ----------------------------------------------
@@ -437,13 +809,24 @@ function isBusy(btn) { return btn.dataset.busy === '1'; }
 function showError(el, text) {
   el.textContent = text;
   el.classList.add('msg-error');
-  el.classList.remove('msg-wait', 'hidden');
+  el.classList.remove('msg-wait', 'msg-info', 'hidden');
   announce(text, true);
 }
 function clearError(el) {
   el.textContent = '';
+  el.classList.remove('msg-error', 'msg-wait', 'msg-info');
   el.classList.add('hidden');
 }
+
+function loadingBox(el) {
+  el.innerHTML = '<div class="loading-box"><div class="spinner spinner-dark" role="presentation"></div><p>読み込んでいます</p></div>';
+}
+
+function newReqId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
 
 /* --- ログイン --------------------------------------------------------- */
 const loginMsg = document.getElementById('loginMsg');
@@ -480,13 +863,13 @@ async function doLogin() {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
       staffName = r.name;
-      enterList();
+      enterApp();
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからお試しください。');
       document.getElementById('staffNo').focus();
     } else {
       showError(loginMsg, '職員番号または暗証番号が違います。' +
-        (typeof r.rest === 'number' ? `（あと${r.rest}回まで）` : ''));
+        (typeof r.rest === 'number' ? '（あと' + r.rest + '回まで）' : ''));
       document.getElementById('pin').focus();
     }
   } catch (e) {
@@ -502,38 +885,294 @@ document.getElementById('staffNo').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('pin').focus();
 });
 
-/* --- 一覧 ------------------------------------------------------------- */
-const listMsg = document.getElementById('listMsg');
-let items = [];
+/* =====================================================================
+ * ログイン後の本体
+ * =================================================================== */
 
 /* 返信の定型文。始業への返信と終業への返信で使い分ける。
  * ★中身はスプレッドシートの「返信定型文」シートから来る。
- *   一覧を読み込むたびに一緒に受け取るので、通信の往復は増えない。
- *   職員がシートを直せば、次に「更新」を押したときから新しい文面になる。 */
+ *   メイン画面と一覧のどちらを読み込んでも一緒に受け取るので、
+ *   通信の往復は増えない。職員がシートを直せば次の読み込みから変わる。 */
 let templates = { '始業': [], '終業': [] };
 
-function enterList() {
+/* どのページを読み込み済みか。
+ * stale は「別のページで返信したので数字が古くなっている」という印。
+ * タブを開いたときに読み直す。 */
+const loaded = { home: false, list: false, month: false };
+const stale  = { home: false, list: false, month: false };
+
+let mainTabs = null, attendTabs = null, activeSub = 'sub-date';
+
+function enterApp() {
   document.getElementById('who').textContent = staffName + ' さん';
-  show('list');
-  loadList();
+  show('app');
+
+  if (!mainTabs) {
+    mainTabs   = setupTabs(document.querySelector('#screen-app > .tabs'), onMainTab);
+    attendTabs = setupTabs(document.querySelector('#panel-attend .subtabs'), onAttendTab);
+  }
+  loadHome();
 }
 
-function newReqId() {
-  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+function onMainTab(id) {
+  if (id === 'tab-home' && (!loaded.home || stale.home)) loadHome();
+  if (id === 'tab-attend') onAttendTab(activeSub);
 }
+
+function onAttendTab(id) {
+  activeSub = id;
+  if (id === 'sub-date' && (!loaded.list || stale.list)) loadList();
+
+  /* 月次と利用者ごとは同じデータを使う。
+   * すでに読み込んであれば、利用者ごとは描き直すだけでよい。 */
+  if (id === 'sub-month' || id === 'sub-user') {
+    if (!loaded.month || stale.month) loadMonth();
+    else if (id === 'sub-user') renderUser();
+  }
+}
+
+/* =====================================================================
+ * メイン画面（本日のダッシュボード）
+ * ---------------------------------------------------------------------
+ * 職員が本日いちばん見たいのは
+ *   ①まだ返信していない報告  ②まだ報告が来ていない利用者
+ * の2つ、と2026-08-18にユーザーが決めた。この2つを大きく出す。
+ * =================================================================== */
+const homeMsg = document.getElementById('homeMsg');
+let homeData = null;
+
+function td(text, cls) {
+  const e = document.createElement('td');
+  if (cls) e.className = cls;
+  e.textContent = (text === null || text === undefined) ? '' : String(text);
+  return e;
+}
+
+function tagSpan(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'tag ' + cls;
+  s.textContent = text;
+  return s;
+}
+
+function tdTag(text, cls) {
+  const e = document.createElement('td');
+  e.appendChild(tagSpan(text, cls));
+  return e;
+}
+
+/* calm を true にすると、数が0でなくても注意色にしない。
+ * 休業日の「未報告」は放っておいてよいものなので、そこで使う。 */
+function setTile(tileId, numId, n, calm) {
+  document.getElementById(numId).textContent = String(n);
+  const t = document.getElementById(tileId);
+  t.classList.toggle('alert', n > 0 && !calm);
+  t.classList.toggle('calm',  n === 0 || !!calm);
+}
+
+async function loadHome() {
+  const btn = document.getElementById('btnHomeReload');
+  if (isBusy(btn)) return;
+  clearError(homeMsg);
+  loadingBox(document.getElementById('homeYetBody'));
+  document.getElementById('homeTbody').innerHTML = '';
+
+  setBusy(btn, '更新中');
+  try {
+    const r = await callApiRetry({ action: 'staffHome', token: token() }, 2, 'rows');
+
+    if (r.ok) {
+      staffName = r.name || staffName;
+      document.getElementById('who').textContent = staffName + ' さん';
+      if (r.templates) templates = r.templates;
+      linkHome(r);
+      homeData = r;
+      loaded.home = true;
+      stale.home  = false;
+      renderHome();
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      document.getElementById('homeYetBody').innerHTML = '';
+      showError(homeMsg, '読み込めませんでした。「更新」を押して、もう一度お試しください。');
+    }
+  } catch (e) {
+    document.getElementById('homeYetBody').innerHTML = '';
+    showError(homeMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+  } finally {
+    setIdle(btn, '更新');
+  }
+}
+
+/* ★サーバーは「本日の一覧(rows)」と「未返信(yet)」を別々にJSONにするので、
+ * 同じ報告でもブラウザに届いた時点では別のオブジェクトになっている。
+ * そのままだと未返信カードから返信しても、表の「返信」欄が「未」のままになる。
+ * ここで本日ぶんを同じオブジェクトに繋ぎ直しておく。 */
+function linkHome(r) {
+  const byUid = {};
+  (r.rows || []).forEach(x => {
+    if (x.start) byUid[x.start.uid] = x.start;
+    if (x.end)   byUid[x.end.uid]   = x.end;
+  });
+  r.yet = (r.yet || []).map(it => byUid[it.uid] || it);
+}
+
+function renderHome(quiet) {
+  const r = homeData;
+  if (!r) return;
+
+  document.getElementById('homeDate').textContent = r.date || '本日';
+  document.getElementById('numYetSub').textContent = '直近' + (r.yetDays || 7) + '日';
+
+  /* 休業日なら「未報告」を注意色で出しても意味がないので、そのことを先に伝える。 */
+  const hol  = document.getElementById('homeHoliday');
+  const rest = !!r.holiday;
+  if (rest) {
+    hol.textContent = '本日は休業日です（' + r.holiday + '）。報告がなくても問題ありません。';
+    hol.classList.remove('hidden');
+  } else {
+    hol.textContent = '';
+    hol.classList.add('hidden');
+  }
+
+  const rows = r.rows || [];
+  const yet  = r.yet  || [];
+  const noRep = rows.filter(x => !x.start).length;   // 本日まだ始業がない人
+
+  setTile('tileYet', 'numYet', yet.length);
+  setTile('tileNo',  'numNo',  noRep, rest);
+
+  // --- 本日の状況の表 ---
+  const tb = document.getElementById('homeTbody');
+  tb.innerHTML = '';
+
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    const c  = td('ウィング利用者シートに名前がありません。');
+    c.colSpan = 7;
+    tr.appendChild(c);
+    tb.appendChild(tr);
+  }
+
+  rows.forEach(x => {
+    const tr = document.createElement('tr');
+    if (!x.start && !x.end) tr.className = 'none';
+
+    // 名前は行の見出しにしておく。読み上げがセルごとに名前を添えてくれる。
+    const th = document.createElement('th');
+    th.setAttribute('scope', 'row');
+    th.className = 'nm';
+    th.textContent = x.name;
+    tr.appendChild(th);
+
+    // 始業
+    if (x.start) tr.appendChild(td(x.start.time));
+    else if (rest) tr.appendChild(tdTag('—', 'none'));
+    else tr.appendChild(tdTag('未報告', 'yet'));
+
+    tr.appendChild(td(x.start ? x.start.taicho : ''));
+
+    // 終業
+    if (x.end) tr.appendChild(td(x.end.time));
+    else if (x.start) tr.appendChild(tdTag('終業まち', 'none'));
+    else tr.appendChild(td(''));
+
+    tr.appendChild(td(x.end ? x.end.kyukei : ''));
+    tr.appendChild(td(x.end ? x.end.sagyo  : ''));
+
+    // 返信の状況。始業・終業それぞれについて出す。
+    const rc = document.createElement('td');
+    if (!x.start && !x.end) {
+      rc.textContent = '';
+    } else {
+      [['始業', x.start], ['終業', x.end]].forEach(pair => {
+        if (!pair[1]) return;
+        const done = pair[1].replies && pair[1].replies.length;
+        const s = tagSpan(pair[0] + (done ? ' 済' : ' 未'), done ? 'done' : 'yet');
+        s.style.marginRight = '4px';
+        // 返信したときに、表を作り直さずここだけ書き換えるための目印
+        s.dataset.uid   = pair[1].uid;
+        s.dataset.kubun = pair[0];
+        // 印どうしの間に空白を入れる。入れないと読み上げが
+        // 「始業 済終業 未」と続けて読んでしまう。
+        if (rc.childNodes.length) rc.appendChild(document.createTextNode(' '));
+        rc.appendChild(s);
+      });
+    }
+    tr.appendChild(rc);
+
+    tb.appendChild(tr);
+  });
+
+  // --- 未返信の報告 ---
+  const yb = document.getElementById('homeYetBody');
+  yb.innerHTML = '';
+  if (!yet.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.style.textAlign = 'center';
+    p.textContent = '未返信の報告はありません。';
+    yb.appendChild(p);
+  } else {
+    /* 返信するとメイン側の数字が変わるので、そのつど数え直す。
+       あわせて一覧のほうを「読み直し待ち」にしておく。 */
+    yet.forEach(it => yb.appendChild(renderCard(it, false, () => {
+      stale.list  = true;
+      stale.month = true;
+      renderHomeCounts();
+    })));
+  }
+
+  if (!quiet) {
+    announce(r.date + 'の状況です。未返信の報告は' + yet.length + '件、'
+      + (rest ? '本日は休業日です。' : 'まだ始業の報告がない方は' + noRep + '名です。'));
+  }
+}
+
+/* 返信したあと、表とカードは作り直さずに数字だけ直す。
+ * 画面が丸ごと入れ替わるとフォーカスが飛んでしまうため。 */
+function renderHomeCounts() {
+  if (!homeData) return;
+  const rows = homeData.rows || [];
+  const yet  = (homeData.yet || []).filter(it => !it.replies.length);
+  setTile('tileYet', 'numYet', yet.length);
+  setTile('tileNo',  'numNo',  rows.filter(x => !x.start).length, !!homeData.holiday);
+
+  // 表の「返信」欄も、その報告の印だけを書き換える
+  const byUid = {};
+  rows.forEach(x => {
+    if (x.start) byUid[x.start.uid] = x.start;
+    if (x.end)   byUid[x.end.uid]   = x.end;
+  });
+  document.querySelectorAll('#homeTbody .tag[data-uid]').forEach(s => {
+    const it = byUid[s.dataset.uid];
+    if (!it) return;
+    const done = it.replies && it.replies.length;
+    s.className = 'tag ' + (done ? 'done' : 'yet');
+    s.textContent = s.dataset.kubun + (done ? ' 済' : ' 未');
+  });
+}
+
+document.getElementById('btnHomeReload').addEventListener('click', loadHome);
+
+/* =====================================================================
+ * 始業・終業管理 → 日付で見る（返信もここから）
+ * =================================================================== */
+const listMsg = document.getElementById('listMsg');
+let items = [];
 
 async function loadList() {
   const btn  = document.getElementById('btnReload');
   if (isBusy(btn)) return;
   const body = document.getElementById('listBody');
   clearError(listMsg);
-  body.innerHTML = '<div class="loading-box"><div class="spinner spinner-dark"></div><p>読み込んでいます</p></div>';
+  loadingBox(body);
 
   setBusy(btn, '更新中');
   try {
     const r = await callApiRetry({
       action: 'staffList',
-      token: localStorage.getItem(TOKEN_KEY),
+      token: token(),
       days: Number(document.getElementById('days').value)
     }, 2, 'items');
 
@@ -542,6 +1181,8 @@ async function loadList() {
       document.getElementById('who').textContent = staffName + ' さん';
       items = r.items || [];
       if (r.templates) templates = r.templates;   // シートで直した文面がここで反映される
+      loaded.list = true;
+      stale.list  = false;
       renderList();
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
@@ -586,7 +1227,11 @@ function renderList(quiet) {
     return;
   }
 
-  shown.forEach(it => body.appendChild(renderCard(it)));
+  // 一覧から返信したら、メイン画面の数字は古くなるので読み直させる
+  shown.forEach(it => body.appendChild(renderCard(it, false, () => {
+    stale.home  = true;
+    stale.month = true;
+  })));
 
   // 何件あって、そのうち何件が未返信かを読み上げる。
   // 一覧を目で見渡せない人にとっては、これが全体像になる。
@@ -596,9 +1241,279 @@ function renderList(quiet) {
   }
 }
 
-// focusOpen: 返信を送ったあとにカードを作り直すとき、
-// 「返信する」ボタンへフォーカスを戻すかどうか
-function renderCard(it, focusOpen) {
+document.getElementById('btnReload').addEventListener('click', loadList);
+document.getElementById('days').addEventListener('change', loadList);
+document.getElementById('onlyYet').addEventListener('change', () => renderList());
+
+/* =====================================================================
+ * 始業・終業管理 → 月次で見る / 利用者ごとに見る
+ * ---------------------------------------------------------------------
+ * 2つの画面は同じ月のデータを見るので、サーバーからは1回でまとめて受け取り、
+ * 利用者を切り替えても通信しない(応答に5秒前後かかるため)。
+ * =================================================================== */
+const monthMsg = document.getElementById('monthMsg');
+const userMsg  = document.getElementById('userMsg');
+let monthData = null;
+
+function hhmmToMin(v) {
+  const m = String(v == null ? '' : v).trim().match(/^(\d{1,2}):(\d{2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function minToHHMM(min) {
+  if (min === null || min === undefined) return '';
+  const sign = min < 0 ? '-' : '';
+  const a = Math.abs(min);
+  return sign + Math.floor(a / 60) + ':' + ('0' + (a % 60)).slice(-2);
+}
+
+/* 月のプルダウン2つ（月次と利用者ごと）と、利用者のプルダウンを埋める。
+ * 選んでいたものは、あれば選び直す。 */
+function fillSelectors(r) {
+  [['ym', r.ym], ['ym2', r.ym]].forEach(pair => {
+    const sel = document.getElementById(pair[0]);
+    sel.innerHTML = '';
+    (r.months || []).forEach(m => {
+      const o = document.createElement('option');
+      o.value = m.ym;
+      o.textContent = m.label;
+      sel.appendChild(o);
+    });
+    sel.value = pair[1];
+  });
+
+  const us = document.getElementById('userSel');
+  const keep = us.value;
+  us.innerHTML = '';
+  (r.users || []).forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.name;
+    o.textContent = u.name;
+    us.appendChild(o);
+  });
+  if (keep && (r.users || []).some(u => u.name === keep)) us.value = keep;
+}
+
+async function loadMonth() {
+  const btn = document.getElementById(activeSub === 'sub-user' ? 'btnUserReload' : 'btnMonthReload');
+  if (isBusy(btn)) return;
+  clearError(monthMsg);
+  clearError(userMsg);
+  document.getElementById('monthTbody').innerHTML = '';
+  document.getElementById('userTbody').innerHTML = '';
+
+  setBusy(btn, '読み込み中');
+  try {
+    const r = await callApiRetry({
+      action: 'staffMonth',
+      token: token(),
+      ym: document.getElementById(activeSub === 'sub-user' ? 'ym2' : 'ym').value || ''
+    }, 2, 'users');
+
+    if (r.ok) {
+      staffName = r.name || staffName;
+      document.getElementById('who').textContent = staffName + ' さん';
+      monthData = r;
+      loaded.month = true;
+      stale.month  = false;
+      fillSelectors(r);
+      /* 両方を描き直すが、読み上げるのはいま開いているほうだけにする。
+         そうしないと、あとから描いたほうの文言で上書きされてしまう。 */
+      renderMonth(activeSub !== 'sub-month');
+      renderUser(activeSub !== 'sub-user');
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      showError(activeSub === 'sub-user' ? userMsg : monthMsg,
+        '読み込めませんでした。「更新」を押して、もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(activeSub === 'sub-user' ? userMsg : monthMsg,
+      '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+  } finally {
+    setIdle(btn, '更新');
+  }
+}
+
+/* 印を並べるための小さな道具。読み上げが続けて読まないよう間に空白を入れる。 */
+function tagsInto(cell, list) {
+  list.forEach((p, i) => {
+    if (i) cell.appendChild(document.createTextNode(' '));
+    cell.appendChild(tagSpan(p[0], p[1]));
+  });
+}
+
+function renderMonth(quiet) {
+  const r = monthData;
+  if (!r) return;
+
+  const tb = document.getElementById('monthTbody');
+  tb.innerHTML = '';
+
+  const users = r.users || [];
+  if (!users.length) {
+    const tr = document.createElement('tr');
+    const c = td('ウィング利用者シートに名前がありません。');
+    c.colSpan = 6;
+    tr.appendChild(c);
+    tb.appendChild(tr);
+    return;
+  }
+
+  users.forEach(u => {
+    const tr = document.createElement('tr');
+
+    const th = document.createElement('th');
+    th.setAttribute('scope', 'row');
+    th.className = 'nm';
+    th.textContent = u.name;
+    tr.appendChild(th);
+
+    tr.appendChild(td(u.useDays + '日', 'num'));
+    tr.appendChild(td(u.total || '', 'num'));
+
+    // 報告の抜け
+    const g = document.createElement('td');
+    const miss = [];
+    if (u.onlyStart) miss.push(['終業なし ' + u.onlyStart + '日', 'yet']);
+    if (u.onlyEnd)   miss.push(['始業なし ' + u.onlyEnd   + '日', 'yet']);
+    if (u.missDays)  miss.push(['報告なし ' + u.missDays  + '日', 'yet']);
+    if (!miss.length) miss.push(['なし', 'done']);
+    tagsInto(g, miss);
+    tr.appendChild(g);
+
+    // 体調。良好は緑、それ以外は橙にして、続いていないかが目でわかるようにする。
+    const t = document.createElement('td');
+    const order = ['良好', 'やや不良', '不良'];
+    const tai = u.taicho || {};
+    const keys = order.filter(k => tai[k])
+      .concat(Object.keys(tai).filter(k => order.indexOf(k) < 0));
+    if (keys.length) tagsInto(t, keys.map(k => [k + ' ' + tai[k], k === '良好' ? 'done' : 'yet']));
+    tr.appendChild(t);
+
+    // その利用者の日ごとの表へ移る
+    const bt = document.createElement('td');
+    const b  = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mini';
+    b.textContent = 'この人を見る';
+    b.setAttribute('aria-label', u.name + 'さんの日ごとの報告を見る');
+    b.addEventListener('click', () => {
+      document.getElementById('userSel').value = u.name;
+      attendTabs.select(document.getElementById('sub-user'), true);
+      renderUser();
+    });
+    bt.appendChild(b);
+    tr.appendChild(bt);
+
+    tb.appendChild(tr);
+  });
+
+  if (!quiet) announce(r.label + 'の月次です。利用者' + users.length + '名を表示しました。');
+}
+
+function renderUser(quiet) {
+  const r   = monthData;
+  const sum = document.getElementById('userSummary');
+  const tb  = document.getElementById('userTbody');
+  tb.innerHTML = '';
+  sum.textContent = '';
+  if (!r) return;
+
+  const name = document.getElementById('userSel').value;
+  const u = (r.users || []).filter(x => x.name === name)[0];
+  if (!u) { sum.textContent = '利用者を選んでください。'; return; }
+
+  // --- 上のまとめ ---
+  const missTotal = u.onlyStart + u.onlyEnd + u.missDays;
+  sum.appendChild(document.createTextNode(u.name + 'さん　' + r.label));
+  [['利用日数 ' + u.useDays + '日', false],
+   ['合計 ' + (u.total || '0:00'), false],
+   ['報告の抜け ' + missTotal + '日', missTotal > 0]].forEach(pair => {
+    const sp = document.createElement('span');
+    sp.className = 'sep';
+    sp.textContent = '／';
+    sum.appendChild(sp);
+    const v = document.createElement('span');
+    if (pair[1]) v.className = 'warn';
+    v.textContent = pair[0];
+    sum.appendChild(v);
+  });
+
+  // --- 日ごとの表 ---
+  const byDay = u.byDay || {};
+  (r.days || []).forEach(day => {
+    const slot = byDay[String(day.d)] || {};
+    const hasS = !!slot.start, hasE = !!slot.end;
+    const countable = day.d <= (r.lastCount || 0);
+
+    const tr = document.createElement('tr');
+    if (day.holiday && !hasS && !hasE)      tr.className = 'none';
+    else if (countable && !(hasS && hasE))  tr.className = 'miss';
+
+    tr.appendChild(td(day.d + '日', 'day'));
+    tr.appendChild(td(day.w));
+    tr.appendChild(td(hasS ? slot.start.taicho : ''));
+    tr.appendChild(td(hasS ? slot.start.time : ''));
+    tr.appendChild(td(hasE ? slot.end.time : ''));
+    tr.appendChild(td(hasE ? slot.end.kyukei : ''));
+
+    // 時間数 = 終了 − 開始 − 昼等休憩。片方しかない日は空欄。
+    let hours = '';
+    if (hasS && hasE) {
+      const st = hhmmToMin(slot.start.time);
+      const en = hhmmToMin(slot.end.time);
+      const ky = hhmmToMin(slot.end.kyukei);
+      if (st !== null && en !== null) hours = minToHHMM(en - st - (ky || 0));
+    }
+    tr.appendChild(td(hours, 'num'));
+
+    tr.appendChild(td(hasE ? slot.end.sagyo : '', 'wrap'));
+
+    // 備考。報告がない休業日は、その理由をここに出す。
+    const bikoCell = td(hasE ? slot.end.biko : (!hasS && !hasE ? (day.holiday || '') : ''), 'wrap');
+    tr.appendChild(bikoCell);
+
+    // 返信
+    const rc = document.createElement('td');
+    const marks = [];
+    if (hasS) marks.push(['始業' + (slot.start.replies && slot.start.replies.length ? ' 済' : ' 未'),
+                          slot.start.replies && slot.start.replies.length ? 'done' : 'yet']);
+    if (hasE) marks.push(['終業' + (slot.end.replies && slot.end.replies.length ? ' 済' : ' 未'),
+                          slot.end.replies && slot.end.replies.length ? 'done' : 'yet']);
+    tagsInto(rc, marks);
+    tr.appendChild(rc);
+
+    tb.appendChild(tr);
+  });
+
+  if (!quiet) {
+    announce(u.name + 'さん、' + r.label + '。利用日数' + u.useDays + '日、合計'
+      + (u.total || '0:00') + '、報告の抜けは' + missTotal + '日です。');
+  }
+}
+
+document.getElementById('btnMonthReload').addEventListener('click', loadMonth);
+document.getElementById('btnUserReload').addEventListener('click', loadMonth);
+document.getElementById('ym').addEventListener('change', () => {
+  document.getElementById('ym2').value = document.getElementById('ym').value;
+  loadMonth();
+});
+document.getElementById('ym2').addEventListener('change', () => {
+  document.getElementById('ym').value = document.getElementById('ym2').value;
+  loadMonth();
+});
+// 利用者を変えるだけなら、もう手元にあるデータで描き直すだけでよい
+document.getElementById('userSel').addEventListener('change', () => renderUser());
+
+/* =====================================================================
+ * 報告カード（メイン画面と一覧の両方で使う）
+ * ---------------------------------------------------------------------
+ * focusOpen : 返信を送ったあとにカードを作り直すとき、
+ *             「返信する」ボタンへフォーカスを戻すかどうか
+ * onReplied : 返信が通ったときに呼ぶ。もう一方のページの数字を
+ *             読み直させるために使う。
+ * =================================================================== */
+function renderCard(it, focusOpen, onReplied) {
   const card = document.createElement('div');
   card.className = 'card' + (it.replies.length ? ' done' : '');
 
@@ -647,13 +1562,13 @@ function renderCard(it, focusOpen) {
     card.appendChild(box);
   });
 
-  card.appendChild(renderReplyBox(it, card, focusOpen));
+  card.appendChild(renderReplyBox(it, card, focusOpen, onReplied));
   return card;
 }
 
 /* 返信の入力欄。最初はボタンだけを出しておき、押したら広がる。
  * 一覧に何十件も並ぶので、最初から入力欄を出すと画面が長くなりすぎるため。 */
-function renderReplyBox(it, card, focusOpen) {
+function renderReplyBox(it, card, focusOpen, onReplied) {
   const wrap = document.createElement('div');
   wrap.className = 'replybox';
 
@@ -760,7 +1675,7 @@ function renderReplyBox(it, card, focusOpen) {
     try {
       const r = await callApiRetry({
         action: 'staffReply',
-        token: localStorage.getItem(TOKEN_KEY),
+        token: token(),
         reqId: pendingReqId,
         uid:  it.uid,
         body: text
@@ -775,7 +1690,8 @@ function renderReplyBox(it, card, focusOpen) {
         it.replies.push({ who: r.who || staffName, text: text, at: '送信しました' });
         /* ★カードをまるごと作り直すので、いま押していたボタンが消えて
              フォーカスが行き場を失う。新しいカードの「返信する」に戻す。 */
-        card.replaceWith(renderCard(it, true));
+        card.replaceWith(renderCard(it, true, onReplied));
+        if (onReplied) onReplied();
         announce(it.name + 'さんの' + it.kubun + 'への返信を送信しました。');
       } else if (r.error === 'unauthorized') {
         logout('ログインの有効期限が切れました。もう一度ログインしてください。');
@@ -795,15 +1711,15 @@ function renderReplyBox(it, card, focusOpen) {
   return wrap;
 }
 
-document.getElementById('btnReload').addEventListener('click', loadList);
-document.getElementById('days').addEventListener('change', loadList);
-document.getElementById('onlyYet').addEventListener('change', renderList);
-
 /* --- ログアウト ------------------------------------------------------- */
 function logout(message) {
   localStorage.removeItem(TOKEN_KEY);
   staffName = '';
   items = [];
+  homeData = null;
+  monthData = null;
+  loaded.home = loaded.list = loaded.month = false;
+  stale.home  = stale.list  = stale.month  = false;
   document.getElementById('staffNo').value = '';
   document.getElementById('pin').value = '';
   clearError(loginMsg);
@@ -814,13 +1730,13 @@ document.getElementById('btnLogout').addEventListener('click', () => logout());
 
 /* --- 起動時 ----------------------------------------------------------- */
 (async function start() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) { show('login'); return; }
+  const t = token();
+  if (!t) { show('login'); return; }
 
   show('loading');
   try {
-    const r = await callApiRetry({ action: 'staffMe', token }, 2, 'name');
-    if (r.ok) { staffName = r.name; enterList(); return; }
+    const r = await callApiRetry({ action: 'staffMe', token: t }, 2, 'name');
+    if (r.ok) { staffName = r.name; enterApp(); return; }
     // サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');
