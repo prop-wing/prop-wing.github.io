@@ -452,6 +452,34 @@
   .pick input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   .pick label:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
 
+  /* 代理入力の「いつもの予定」と備考のプレビュー */
+  #pxRoutineList label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 8px;
+    padding: 9px 12px;
+    font-weight: 400;
+    font-size: 15px;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  #pxRoutineList input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+
+  .preview {
+    padding: 10px 13px;
+    background: #f4f7f4;
+    border: 1px solid #9ccbb0;
+    border-radius: 8px;
+    font-size: 15px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 1.7em;
+  }
+  .preview.empty { color: var(--muted); background: #f6f7f8; border-color: var(--line); }
+
   .soon {
     padding: 34px 20px;
     text-align: center;
@@ -735,10 +763,25 @@
 
         <label for="pxSagyo">訓練・作業内容</label>
         <textarea id="pxSagyo" style="min-height:70px"></textarea>
+        <!-- ★その人が前に書いた内容だけを出す。他の利用者の入力は混ざらない。 -->
+        <p class="suggest-label hidden" id="pxSagyoLabel">この方が前に書いた内容（押すと入ります）</p>
+        <div class="suggest" id="pxSagyoSuggest" role="group" aria-label="この方が前に書いた内容"></div>
+
+        <!-- いつもの予定。その人・その曜日に登録があるときだけ出る -->
+        <div id="pxRoutineWrap" class="hidden">
+          <p class="label" id="lbl-pxRoutine">いつもの予定（<span id="pxRoutineDay"></span>曜日）</p>
+          <p class="hint" id="hint-pxRoutine">その日に無かったものは、チェックを外してください</p>
+          <div id="pxRoutineList" role="group" aria-labelledby="lbl-pxRoutine"></div>
+        </div>
 
         <label for="pxBiko">備考</label>
         <p class="hint" id="hint-pxBiko">他のサービスを利用した時間帯など。日報の備考欄に出ます</p>
         <textarea id="pxBiko" style="min-height:70px" aria-describedby="hint-pxBiko"></textarea>
+
+        <!-- ★aria-live は付けない。1文字打つたびに全文が読み上げられて
+             使い物にならなくなる(2026-08-14に実際にそうなった)。 -->
+        <p class="suggest-label" style="margin-top:10px;">備考として記録される内容</p>
+        <div class="preview" id="pxBikoPreview"></div>
       </div>
 
       <label for="pxMemo">自由記述（任意）</label>
@@ -1711,6 +1754,110 @@ document.querySelectorAll('input[name="pxTaicho"]').forEach(r => {
   r.addEventListener('change', () => setPxTaicho(r.value));
 });
 
+/* --- 代理入力で使う、その利用者の補助データ ---------------------------
+ * 「いつもの予定」と「前に書いた訓練・作業内容」。
+ * ★サーバーから一覧と一緒に受け取っているので、ここでは通信しない。
+ * ★出るのは必ずその利用者本人のぶんだけ。
+ * --------------------------------------------------------------------- */
+const PX_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+
+function extrasOf(name) {
+  const src = (homeData && homeData.extras) || (monthData && monthData.extras) || {};
+  return src[name] || { routines: [], sagyoList: [] };
+}
+
+/* 選んでいる日の曜日 */
+function pxWeekday() {
+  const m = String(document.getElementById('pxDate').value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return PX_WEEK[new Date().getDay()];
+  return PX_WEEK[new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay()];
+}
+
+/* 前に書いた内容のボタン。押すと欄に入る(上書きする) */
+function renderPxSagyo(list) {
+  const box   = document.getElementById('pxSagyoSuggest');
+  const label = document.getElementById('pxSagyoLabel');
+  box.innerHTML = '';
+  const items = Array.isArray(list) ? list : [];
+  label.classList.toggle('hidden', items.length === 0);
+
+  items.forEach(text => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.setAttribute('aria-label', '「' + text + '」を入れる');
+    b.addEventListener('click', () => {
+      const ta = document.getElementById('pxSagyo');
+      ta.value = text;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      announce('入れました。' + text);
+    });
+    box.appendChild(b);
+  });
+}
+
+/* いつもの予定のチェック欄。選んでいる日の曜日のぶんだけ出す。
+ * ★最初からチェックが入っている。いつも通りの日は何もしなくてよいように。
+ *   利用者の画面と同じ考え方。 */
+function renderPxRoutines() {
+  const wrap = document.getElementById('pxRoutineWrap');
+  const list = document.getElementById('pxRoutineList');
+  const day  = pxWeekday();
+  const mine = (extrasOf(proxyName).routines || []).filter(r => r.day === day);
+
+  document.getElementById('pxRoutineDay').textContent = day;
+  list.setAttribute('aria-label', 'いつもの予定（' + day + '曜日）');
+  list.innerHTML = '';
+  wrap.classList.toggle('hidden', mine.length === 0);
+
+  mine.forEach((r, i) => {
+    const lab = document.createElement('label');
+    const cb  = document.createElement('input');
+    const sp  = document.createElement('span');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.text = r.text;
+    cb.id = 'pxrt-' + i;
+    sp.textContent = r.text;
+    // ★for と id で明示的に結ぶ。囲むだけだと
+    //   「チェックボックス オン」としか読まれないことがある。
+    lab.htmlFor = cb.id;
+    cb.addEventListener('change', () => {
+      updatePxBikoPreview();
+      announce((cb.checked ? '追加しました：' : '外しました：') + r.text);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(sp);
+    list.appendChild(lab);
+  });
+  updatePxBikoPreview();
+}
+
+/* チェックの入った予定 → 自分で書いた備考 の順に改行でつなぐ。
+ * 利用者の画面(composeBiko)と同じ並べ方にしてある。 */
+function composePxBiko() {
+  const parts = [];
+  document.querySelectorAll('#pxRoutineList input:checked').forEach(cb => parts.push(cb.dataset.text));
+  const extra = document.getElementById('pxBiko').value.trim();
+  if (extra) parts.push(extra);
+  return parts.join('\n');
+}
+
+function updatePxBikoPreview() {
+  const el = document.getElementById('pxBikoPreview');
+  const t  = composePxBiko();
+  el.textContent = t || '（記入なし）';
+  el.classList.toggle('empty', !t);
+}
+
+document.getElementById('pxBiko').addEventListener('input', updatePxBikoPreview);
+document.getElementById('pxDate').addEventListener('change', () => {
+  // 日が変われば曜日も変わる。いつもの予定を出し直す。
+  renderPxRoutines();
+  announce(jpDate(document.getElementById('pxDate').value) + 'に変えました。');
+});
+
 /* ダイアログの中だけでTabが回るようにする。
  * ★これをやらないと、読み上げの利用者はTabで背後の表へ抜けてしまい、
  *   自分がどこにいるのか分からなくなる。 */
@@ -1753,6 +1900,12 @@ function openProxy(opt, trigger) {
   document.getElementById('pxKyukei').value = '';
   ['pxSagyo', 'pxBiko', 'pxMemo'].forEach(id => { document.getElementById(id).value = ''; });
 
+  /* その利用者の「前に書いた内容」と「いつもの予定」を出す。
+     サーバーから一覧と一緒に受け取っているので、ここでは通信しない。 */
+  const ex = extrasOf(opt.name);
+  renderPxSagyo(ex.sagyoList);
+  renderPxRoutines();
+
   document.getElementById('proxyOverlay').classList.remove('hidden');
   document.getElementById('proxyDlg').focus();
   announce(opt.name + 'さんの報告を代理で入力します。'
@@ -1791,7 +1944,8 @@ async function sendProxy() {
   const time   = document.getElementById('pxTime').value;
   const kyukei = document.getElementById('pxKyukei').value;
   const sagyo  = document.getElementById('pxSagyo').value.trim();
-  const biko   = document.getElementById('pxBiko').value.trim();
+  // ★チェックの入った「いつもの予定」と、自分で書いた備考をつないで送る
+  const biko   = composePxBiko();
   const memo   = document.getElementById('pxMemo').value.trim();
 
   // 足りない欄までフォーカスを連れて行く
