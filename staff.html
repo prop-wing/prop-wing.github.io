@@ -2163,8 +2163,14 @@ function cNum(ref, s, v) {
   if (v === null || v === undefined) return cBlank(ref, s);
   return '<c r="' + ref + '" s="' + s + '"><v>' + v + '</v></c>';
 }
-function cFml(ref, s, f) {
-  return '<c r="' + ref + '" s="' + s + '"><f>' + xmlEsc(f) + '</f></c>';
+/* ★数式には計算結果(v)も必ず一緒に書くこと。
+     Excelの「保護ビュー」（インターネットから取ったファイルを最初に開いたときの状態）は
+     数式を計算しない。保存されている計算結果をそのまま映すだけなので、
+     結果を入れておかないと、時間数・計・利用日数が空欄に見える。
+     2026-08-22にユーザーが実機で発見した。 */
+function cFml(ref, s, f, v) {
+  return '<c r="' + ref + '" s="' + s + '"><f>' + xmlEsc(f) + '</f>' +
+    (v === null || v === undefined ? '' : '<v>' + v + '</v>') + '</c>';
 }
 function cBlank(ref, s) {
   return '<c r="' + ref + '" s="' + s + '"/>';
@@ -2202,6 +2208,9 @@ function nippoSheetXml(book, S, isFirst) {
   row(3, ' ht="14.25" customHeight="1"', head);
 
   // データの行
+  var totalVal = 0;    // 計（1日を1とした割合の合計）
+  var useCount = 0;    // 利用日数（開始時間がある日の数）
+
   book.rows.forEach(function (d, i) {
     var n    = rTop + i;
     var last = (n === rBot);
@@ -2220,18 +2229,21 @@ function nippoSheetXml(book, S, isFirst) {
       cNum(colName(5) + n, stl[4], ev),
       cNum(colName(6) + n, stl[5], kv),
       (sv !== null && ev !== null)
-        ? cFml(colName(7) + n, stl[6], 'E' + n + '-D' + n + '-F' + n)
+        ? cFml(colName(7) + n, stl[6], 'E' + n + '-D' + n + '-F' + n, ev - sv - (kv || 0))
         : cBlank(colName(7) + n, stl[6]),
       cStr(colName(8) + n, stl[7], d.sagyo || ''),
       cStr(colName(9) + n, stl[8], hol ? d.holiday : (d.biko || ''))
     ];
+    if (sv !== null) useCount++;
+    if (sv !== null && ev !== null) totalVal += ev - sv - (kv || 0);
     row(n, ' ht="27" customHeight="1"', cells);
   });
 
   // 計の行
   var tot = [cStr('A' + rTot, S.total[0], '計')];
   for (var c2 = 2; c2 <= 9; c2++) {
-    if (c2 === 7) tot.push(cFml('G' + rTot, S.total[6], 'SUM(G' + rTop + ':G' + rBot + ')'));
+    if (c2 === 7) tot.push(cFml('G' + rTot, S.total[6],
+                                'SUM(G' + rTop + ':G' + rBot + ')', totalVal));
     else          tot.push(cBlank(colName(c2) + rTot, S.total[c2 - 1]));
   }
   row(rTot, ' ht="14.25" customHeight="1"', tot);
@@ -2240,7 +2252,7 @@ function nippoSheetXml(book, S, isFirst) {
   row(rUse, '', [
     cStr('B' + rUse, S.useLbl,  '利用日数　：'),
     cBlank('C' + rUse, S.useLbl),
-    cFml('D' + rUse, S.useNum, 'COUNT(D' + rTop + ':D' + rBot + ')'),
+    cFml('D' + rUse, S.useNum, 'COUNT(D' + rTop + ':D' + rBot + ')', useCount),
     cStr('E' + rUse, S.useUnit, '日')
   ]);
 
@@ -2407,9 +2419,9 @@ function buildNippoXlsx(books) {
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<sheets>' + sheetTags + '</sheets>' +
       (defined ? '<definedNames>' + defined + '</definedNames>' : '') +
-      /* ★数式の計算結果を持たせていないので、開いたときに必ず計算させる。
-         これが無いと、ソフトによっては時間数が空欄のまま見えることがある。 */
-      '<calcPr calcId="0" fullCalcOnLoad="1"/>' +
+      /* 数式には計算結果も入れてあるので、開いたときの強制再計算は要らない。
+         (強制再計算にすると、何も直していないのに「保存しますか」と聞かれる) */
+      '<calcPr calcId="191029"/>' +
       '</workbook>' },
 
     { name: 'xl/_rels/workbook.xml.rels', data:
