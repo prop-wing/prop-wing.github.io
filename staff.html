@@ -1940,6 +1940,11 @@ function StyleBook() {
   // fill は 0=なし 1=gray125 が予約席。ここを空けておかないとExcelが嫌がる。
   this.fills.push('<fill><patternFill patternType="none"/></fill>');
   this.fills.push('<fill><patternFill patternType="gray125"/></fill>');
+
+  /* ★border も0番は「罫線なし」を予約席にする。
+     ここを実際の罫線で埋めてしまうと、下の applyBorder の話と重なって
+     表の内側の罫線がまるごと消える（2026-08-22に実際にそうなった）。 */
+  this.borders.push('<border><left/><right/><top/><bottom/><diagonal/></border>');
 }
 
 StyleBook.prototype.font = function (opt) {
@@ -1992,13 +1997,14 @@ StyleBook.prototype.xf = function (o) {
       (o.v ? ' vertical="' + o.v + '"' : '') +
       (o.wrap ? ' wrapText="1"' : '') + '/>';
   }
+  /* ★apply〜 の印は必ず全部書くこと。番号が0のときに省く作りにしていたら、
+       Excelが「指定なし」とみなして、表の内側の罫線が全部消えた。
+       ★これは openpyxl では見つからない。openpyxl は apply〜 を見ないので
+       「罫線あり」と報告してくる。確かめるときは必ず本物のExcelで開くこと。 */
   var xml = '<xf numFmtId="' + numFmtId + '" fontId="' + fontId + '" fillId="' + fillId +
     '" borderId="' + borderId + '" xfId="0"' +
-    (numFmtId ? ' applyNumberFormat="1"' : '') +
-    (fontId   ? ' applyFont="1"'         : '') +
-    (fillId   ? ' applyFill="1"'         : '') +
-    (borderId ? ' applyBorder="1"'       : '') +
-    (al       ? ' applyAlignment="1">' + al + '</xf>' : '/>');
+    ' applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"' +
+    (al ? ' applyAlignment="1">' + al + '</xf>' : '/>');
   return this._push(this.xfs, xml);
 };
 
