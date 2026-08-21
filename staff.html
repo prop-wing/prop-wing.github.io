@@ -489,6 +489,154 @@
     border-radius: 12px;
   }
 
+  /* =====================================================================
+   * 日報（現物のExcelと同じ見た目）
+   * ---------------------------------------------------------------------
+   * ★列の幅は現物のExcelの列幅をそのまま割合にしてある。
+   *   A=10.5 B=6 C=10.375 D〜G=13.25 H=33.5 I=23（合計136.375）
+   *   画面と印刷とExcelで、同じ並びに見えるようにするため。
+   * ★色も現物どおり。見出し=#CCFFFF / 休業日の行=#C5D9F1 / 注記の一部=赤。
+   * =================================================================== */
+  .nippo {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px 22px;
+    overflow-x: auto;
+  }
+  .nippo-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 10px;
+    min-width: 780px;
+  }
+  .nippo-title { font-weight: 700; font-size: 19px; }
+  .nippo-name  { margin-left: auto; font-weight: 700; font-size: 16px; }
+
+  table.nippo-table {
+    width: 100%;
+    min-width: 780px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  table.nippo-table th, table.nippo-table td {
+    border: 1px solid #7f8894;
+    padding: 3px 5px;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  table.nippo-table thead th {
+    background: #CCFFFF;
+    text-align: center;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  table.nippo-table tbody td { height: 30px; }
+  table.nippo-table td.c-day  { text-align: right; white-space: nowrap; }
+  table.nippo-table td.c-week { text-align: center; }
+  table.nippo-table td.c-tai  { text-align: center; }
+  table.nippo-table td.c-time { text-align: right; font-variant-numeric: tabular-nums; }
+  table.nippo-table td.c-text {
+    text-align: left;
+    vertical-align: top;
+    white-space: pre-wrap;
+    font-size: 12px;
+  }
+  table.nippo-table tr.hol td { background: #C5D9F1; }
+
+  /* 外枠は太く、内側は細く（現物と同じ）。
+     ★table 自体に border を付けると「計」の行が H・I 列まで囲まれてしまう。
+       現物は計の行が G 列で終わっているので、外枠はセル側で引く。 */
+  table.nippo-table thead th { border-top: 2px solid #333; }
+  table.nippo-table thead th:first-child,
+  table.nippo-table tbody td:first-child,
+  table.nippo-table tfoot th:first-child { border-left: 2px solid #333; }
+  table.nippo-table thead th:last-child,
+  table.nippo-table tbody td:last-child  { border-right: 2px solid #333; }
+  table.nippo-table tbody tr:last-child td { border-bottom: 2px solid #333; }
+
+  table.nippo-table tfoot td, table.nippo-table tfoot th {
+    border-top: 2px solid #333;
+    border-bottom: 2px solid #333;
+    font-weight: 400;
+  }
+  table.nippo-table tfoot th.t-lbl { text-align: center; }
+  table.nippo-table tfoot td.t-sum {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    border-right: 2px solid #333;
+  }
+  table.nippo-table tfoot td.t-none { border: none; background: transparent; }
+
+  .nippo-use {
+    margin: 12px 0 0 8%;
+    font-size: 13px;
+    min-width: 300px;
+  }
+  .nippo-use span {
+    display: inline-block;
+    border-bottom: 1px solid #7f8894;
+    padding: 0 10px;
+    min-width: 4em;
+    text-align: center;
+  }
+  .nippo-use span.lbl { min-width: 8em; }
+
+  .nippo-notes { margin-top: 22px; font-size: 13px; line-height: 1.6; }
+  .nippo-notes p { margin: 0; white-space: pre-wrap; }
+  .nippo-notes p.red { color: #e00000; }
+
+  /* =====================================================================
+   * 印刷（A4縦1枚に収める）
+   * ---------------------------------------------------------------------
+   * ★日報のところだけを残して、他は見えなくする。
+   *   タブや操作ボタンが紙に出ると、日報として使えないため。
+   * ★色を紙にも出す指定を入れておく（既定では背景色が印刷されない）。
+   * =================================================================== */
+  @media print {
+    @page { size: A4 portrait; margin: 10mm; }
+
+    body { background: #fff; padding: 0; }
+    body * { visibility: hidden; }
+    #nippoSheet, #nippoSheet * { visibility: visible; }
+    #nippoSheet {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      overflow: visible;
+    }
+
+    /* ★A4縦1枚に収まるところまで詰めてある（実測して決めた値）。
+       ふつうの月で約244mm、備考と作業内容が全日2行という最悪の場合でも
+       約260mm。用紙の高さから余白を引いた277mmに収まる。
+       ここを大きくすると2枚目にこぼれるので、変えるときは必ず測り直すこと。 */
+    #nippoSheet .nippo-head,
+    #nippoSheet table.nippo-table { min-width: 0; }
+    #nippoSheet .nippo-head  { margin-bottom: 4px; }
+    #nippoSheet .nippo-title { font-size: 13pt; }
+    #nippoSheet .nippo-name  { font-size: 10pt; }
+    #nippoSheet table.nippo-table { font-size: 7pt; line-height: 1.3; }
+    #nippoSheet table.nippo-table th,
+    #nippoSheet table.nippo-table td { padding: 1px 3px; }
+    #nippoSheet table.nippo-table td.c-text { font-size: 6.5pt; }
+    #nippoSheet table.nippo-table tbody td { height: 6.2mm; }
+    #nippoSheet .nippo-use,
+    #nippoSheet .nippo-notes { font-size: 7.5pt; margin-top: 8px; }
+    #nippoSheet .nippo-notes { line-height: 1.45; }
+
+    /* 背景色（見出しの水色・休業日の青）を紙にも出す */
+    #nippoSheet * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+
   /* 画面が狭いときは少し詰める。作りは変えない。 */
   @media (max-width: 700px) {
     body { padding: 10px; }
@@ -718,10 +866,37 @@
       </div>
     </div>
 
-    <!-- ---------- 日報 ---------- -->
+    <!-- ---------- 日報 ----------
+         現物のExcelと同じ体裁で見せる。画面での修正はしない（見る・印刷する・
+         Excelで出す、の3つだけ）。2026-08-18にユーザーが決めた形。
+         ★通信はしない。始業・終業管理と同じ月次データから組み立てている。 -->
     <div id="panel-nippo" role="tabpanel" tabindex="-1" aria-labelledby="tab-nippo" class="hidden">
-      <p class="soon">「日報」はこれから作ります。<br>
-        利用者と月を選んで画面で確認し、印刷とExcel出力ができるようにする予定です。</p>
+      <div class="bar">
+        <label class="inline" for="ymN">月
+          <select id="ymN" aria-label="月"></select>
+        </label>
+        <label class="inline" for="userSelN">利用者
+          <select id="userSelN" aria-label="利用者"></select>
+        </label>
+        <span style="margin-right:auto;"></span>
+        <button type="button" id="btnNippoReload" class="btn-small">更新</button>
+      </div>
+
+      <div class="bar">
+        <button type="button" id="btnNippoPrint" class="btn-small">この日報を印刷する</button>
+        <button type="button" id="btnNippoXlsx" class="btn-small">この方の日報をExcelで保存</button>
+        <button type="button" id="btnNippoXlsxAll" class="btn-small">全員分をExcelで保存</button>
+      </div>
+
+      <p class="hint">
+        画面に出ているものがそのまま印刷されます（A4縦・1枚）。<br>
+        Excelは現物の日報と同じ体裁（列幅・行の高さ・数式・印刷設定まで）で保存されます。
+        「時間数」「計」「利用日数」はExcelの中でも数式のままなので、あとから直しても計算し直されます。
+      </p>
+
+      <div id="nippoMsg" class="msg msg-error hidden"></div>
+
+      <div id="nippoSheet" class="nippo" role="region" aria-live="off" aria-labelledby="tab-nippo"></div>
     </div>
   </section>
 
@@ -1064,6 +1239,13 @@ function onMainTab(id) {
   activeMain = id;
   if (id === 'tab-home' && (!loaded.home || stale.home)) loadHome();
   if (id === 'tab-attend') onAttendTab(activeSub);
+
+  /* 日報は「始業・終業管理」と同じ月次データから作る。
+     すでに読んであれば描き直すだけでよい（通信しない）。 */
+  if (id === 'tab-nippo') {
+    if (!loaded.month || stale.month) loadMonth();
+    else { renderNippo(true); setTimeout(sayNippo, 320); }
+  }
 }
 
 function onAttendTab(id) {
@@ -1425,7 +1607,7 @@ function minToHHMM(min) {
 /* 月のプルダウン2つ（月次と利用者ごと）と、利用者のプルダウンを埋める。
  * 選んでいたものは、あれば選び直す。 */
 function fillSelectors(r) {
-  [['ym', r.ym], ['ym2', r.ym]].forEach(pair => {
+  [['ym', r.ym], ['ym2', r.ym], ['ymN', r.ym]].forEach(pair => {
     const sel = document.getElementById(pair[0]);
     sel.innerHTML = '';
     (r.months || []).forEach(m => {
@@ -1437,32 +1619,47 @@ function fillSelectors(r) {
     sel.value = pair[1];
   });
 
-  const us = document.getElementById('userSel');
-  const keep = us.value;
-  us.innerHTML = '';
-  (r.users || []).forEach(u => {
-    const o = document.createElement('option');
-    o.value = u.name;
-    o.textContent = u.name;
-    us.appendChild(o);
+  // 利用者のプルダウンは「利用者ごとに見る」と「日報」の2か所にある
+  ['userSel', 'userSelN'].forEach(id => {
+    const us = document.getElementById(id);
+    const keep = us.value;
+    us.innerHTML = '';
+    (r.users || []).forEach(u => {
+      const o = document.createElement('option');
+      o.value = u.name;
+      o.textContent = u.name;
+      us.appendChild(o);
+    });
+    if (keep && (r.users || []).some(u => u.name === keep)) us.value = keep;
   });
-  if (keep && (r.users || []).some(u => u.name === keep)) us.value = keep;
+}
+
+/* 月次・利用者ごと・日報の3か所から同じ読み込みを呼ぶので、
+ * 「いまどこを見ているか」で、押したボタン・月のプルダウン・
+ * エラーを出す場所を選ぶ。 */
+function monthContext() {
+  if (activeMain === 'tab-nippo')  return { btn: 'btnNippoReload', ym: 'ymN', msg: nippoMsg };
+  if (activeSub  === 'sub-user')   return { btn: 'btnUserReload',  ym: 'ym2', msg: userMsg  };
+  return { btn: 'btnMonthReload', ym: 'ym', msg: monthMsg };
 }
 
 async function loadMonth() {
-  const btn = document.getElementById(activeSub === 'sub-user' ? 'btnUserReload' : 'btnMonthReload');
+  const ctx = monthContext();
+  const btn = document.getElementById(ctx.btn);
   if (isBusy(btn)) return;
   clearError(monthMsg);
   clearError(userMsg);
+  clearError(nippoMsg);
   document.getElementById('monthTbody').innerHTML = '';
   document.getElementById('userTbody').innerHTML = '';
+  document.getElementById('nippoSheet').innerHTML = '';
 
   setBusy(btn, '読み込み中');
   try {
     const r = await callApiRetry({
       action: 'staffMonth',
       token: token(),
-      ym: document.getElementById(activeSub === 'sub-user' ? 'ym2' : 'ym').value || ''
+      ym: document.getElementById(ctx.ym).value || ''
     }, 2, 'users');
 
     if (r.ok) {
@@ -1472,19 +1669,20 @@ async function loadMonth() {
       loaded.month = true;
       stale.month  = false;
       fillSelectors(r);
-      /* 両方を描き直すが、読み上げるのはいま開いているほうだけにする。
-         そうしないと、あとから描いたほうの文言で上書きされてしまう。 */
-      renderMonth(activeSub !== 'sub-month');
-      renderUser(activeSub !== 'sub-user');
+      /* 3つとも描き直すが、読み上げるのはいま開いているものだけにする。
+         そうしないと、あとから描いたものの文言で上書きされてしまう。 */
+      const onMonth = (activeMain === 'tab-attend' && activeSub === 'sub-month');
+      const onUser  = (activeMain === 'tab-attend' && activeSub === 'sub-user');
+      renderMonth(!onMonth);
+      renderUser(!onUser);
+      renderNippo(activeMain !== 'tab-nippo');
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else {
-      showError(activeSub === 'sub-user' ? userMsg : monthMsg,
-        '読み込めませんでした。「更新」を押して、もう一度お試しください。');
+      showError(ctx.msg, '読み込めませんでした。「更新」を押して、もう一度お試しください。');
     }
   } catch (e) {
-    showError(activeSub === 'sub-user' ? userMsg : monthMsg,
-      '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    showError(ctx.msg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
   } finally {
     setIdle(btn, '更新');
   }
@@ -1660,16 +1858,846 @@ function renderUser(quiet) {
 
 document.getElementById('btnMonthReload').addEventListener('click', loadMonth);
 document.getElementById('btnUserReload').addEventListener('click', loadMonth);
-document.getElementById('ym').addEventListener('change', () => {
-  document.getElementById('ym2').value = document.getElementById('ym').value;
+/* 月のプルダウンは3か所にある。どれを変えても3つともそろえる。 */
+function syncYm(from) {
+  const v = document.getElementById(from).value;
+  ['ym', 'ym2', 'ymN'].forEach(id => { document.getElementById(id).value = v; });
   loadMonth();
-});
-document.getElementById('ym2').addEventListener('change', () => {
-  document.getElementById('ym').value = document.getElementById('ym2').value;
-  loadMonth();
-});
+}
+document.getElementById('ym').addEventListener('change',  () => syncYm('ym'));
+document.getElementById('ym2').addEventListener('change', () => syncYm('ym2'));
 // 利用者を変えるだけなら、もう手元にあるデータで描き直すだけでよい
 document.getElementById('userSel').addEventListener('change', () => renderUser());
+
+/* =========================================================================
+ * 日報の Excel(.xlsx) をブラウザの中で組み立てる
+ * -------------------------------------------------------------------------
+ * ★なぜブラウザ側で作るのか
+ *   Apps Script でシートを作って書き出す方式だと、印刷設定(A4縦・
+ *   fitToPage・余白・水平中央)が xlsx に載らない。Apps Script には
+ *   印刷設定を触るAPIが無いため。責任者の要件が「Excelと同じ体裁」
+ *   なので、ここが欠けると意味がない。
+ *   自前で xlsx を組み立てれば、体裁を最後まで指定できる。
+ *   おまけに通信が要らないので、サーバーの5秒待ちも起きない。
+ *
+ * ★体裁は現物(日報８年７月.xlsx)を openpyxl で実測した値に合わせてある。
+ *   列幅 A=10.5 B=6 C=10.375 D〜G=13.25 H=33.5 I=23
+ *   行高 1行目=17.25 / 2〜3行目=14.25 / データ行=27 / 計の行=14.25
+ *   表示形式 A=組み込み56(m"月"d"日") / D〜G=組み込み20(h:mm) / 計=[h]:mm
+ *   数式 G=E-D-F / 計=SUM / 利用日数=COUNT
+ *   塗り 見出し=#CCFFFF / 休業日の行=#C5D9F1 / 注記の一部=赤
+ *   印刷 A4縦・fitToPage・拡大縮小69%・水平中央・余白(左1.5cm 右1.0cm 上下1.5cm)
+ *
+ * ★罫線は現物が手作りで不揃い(隣り合うセルで指定が食い違っている)。
+ *   そこまでは再現せず、外枠=medium・内側=thin のきれいな表にする。
+ *   これは2026-08-18にユーザーが選んだ方針。
+ * ========================================================================= */
+
+/* --- 小さな道具 --------------------------------------------------------- */
+
+function xmlEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+    .replace(/\r\n/g, '&#10;').replace(/\n/g, '&#10;').replace(/\r/g, '&#10;');
+}
+
+/* toZen（半角→全角）は日報の画面側で定義してある。 */
+
+/* 列番号(1〜) → 'A' 'B' ... */
+function colName(n) {
+  var s = '';
+  while (n > 0) { var r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - 1 - r) / 26; }
+  return s;
+}
+
+/* Excelの日付シリアル値。1900年うるう年バグに合わせて 1899/12/30 を起点にする。 */
+function dateSerial(year, month, day) {
+  return Math.round((Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86400000);
+}
+
+/* '9:30' → 0.395833...（1日を1とした割合）。Excelの時刻の実値。 */
+function timeValue(hhmm) {
+  var m = String(hhmm == null ? '' : hhmm).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return (Number(m[1]) * 60 + Number(m[2])) / 1440;
+}
+
+
+/* =========================================================================
+ * スタイル置き場
+ * -------------------------------------------------------------------------
+ * 同じ組み合わせは1つにまとめる(同じ内容のxfを何十個も作らないため)。
+ * ======================================================================= */
+function StyleBook() {
+  this.numFmts = [];        // {id, code} 独自の表示形式だけ
+  this.fonts   = [];
+  this.fills   = [];
+  this.borders = [];
+  this.xfs     = [];
+  this._seen   = {};
+
+  // fill は 0=なし 1=gray125 が予約席。ここを空けておかないとExcelが嫌がる。
+  this.fills.push('<fill><patternFill patternType="none"/></fill>');
+  this.fills.push('<fill><patternFill patternType="gray125"/></fill>');
+}
+
+StyleBook.prototype.font = function (opt) {
+  var xml = '<font>' +
+    (opt.bold ? '<b/>' : '') +
+    '<sz val="' + (opt.size || 11) + '"/>' +
+    (opt.color ? '<color rgb="FF' + opt.color + '"/>' : '') +
+    '<name val="' + (opt.name || 'ＭＳ Ｐゴシック') + '"/>' +
+    '<family val="3"/><charset val="128"/></font>';
+  return this._push(this.fonts, xml);
+};
+
+StyleBook.prototype.fill = function (rgb) {
+  if (!rgb) return 0;
+  return this._push(this.fills,
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF' + rgb +
+    '"/><bgColor indexed="64"/></patternFill></fill>');
+};
+
+/* l/r/t/b は '' | 'thin' | 'medium' */
+StyleBook.prototype.border = function (l, r, t, b) {
+  function side(tag, style) {
+    return style ? '<' + tag + ' style="' + style + '"><color indexed="64"/></' + tag + '>'
+                 : '<' + tag + '/>';
+  }
+  return this._push(this.borders,
+    '<border>' + side('left', l) + side('right', r) +
+    side('top', t) + side('bottom', b) + '<diagonal/></border>');
+};
+
+StyleBook.prototype.numFmt = function (code) {
+  for (var i = 0; i < this.numFmts.length; i++) {
+    if (this.numFmts[i].code === code) return this.numFmts[i].id;
+  }
+  var id = 176 + this.numFmts.length;
+  this.numFmts.push({ id: id, code: code });
+  return id;
+};
+
+/* 使うスタイルを1つ登録して、その番号(cellXfsの添字)を返す */
+StyleBook.prototype.xf = function (o) {
+  var numFmtId = o.numFmtId || 0;
+  var fontId   = o.fontId   || 0;
+  var fillId   = o.fillId   || 0;
+  var borderId = o.borderId || 0;
+  var al = '';
+  if (o.h || o.v || o.wrap) {
+    al = '<alignment' +
+      (o.h ? ' horizontal="' + o.h + '"' : '') +
+      (o.v ? ' vertical="' + o.v + '"' : '') +
+      (o.wrap ? ' wrapText="1"' : '') + '/>';
+  }
+  var xml = '<xf numFmtId="' + numFmtId + '" fontId="' + fontId + '" fillId="' + fillId +
+    '" borderId="' + borderId + '" xfId="0"' +
+    (numFmtId ? ' applyNumberFormat="1"' : '') +
+    (fontId   ? ' applyFont="1"'         : '') +
+    (fillId   ? ' applyFill="1"'         : '') +
+    (borderId ? ' applyBorder="1"'       : '') +
+    (al       ? ' applyAlignment="1">' + al + '</xf>' : '/>');
+  return this._push(this.xfs, xml);
+};
+
+StyleBook.prototype._push = function (arr, xml) {
+  var key = arr === this.fonts ? 'f' : arr === this.fills ? 'p' : arr === this.borders ? 'b' : 'x';
+  key += '\u0000' + xml;
+  if (this._seen[key] !== undefined) return this._seen[key];
+  arr.push(xml);
+  this._seen[key] = arr.length - 1;
+  return arr.length - 1;
+};
+
+StyleBook.prototype.toXml = function () {
+  var nf = this.numFmts.length
+    ? '<numFmts count="' + this.numFmts.length + '">' +
+      this.numFmts.map(function (n) {
+        return '<numFmt numFmtId="' + n.id + '" formatCode="' + xmlEsc(n.code) + '"/>';
+      }).join('') + '</numFmts>'
+    : '';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    nf +
+    '<fonts count="' + this.fonts.length + '">' + this.fonts.join('') + '</fonts>' +
+    '<fills count="' + this.fills.length + '">' + this.fills.join('') + '</fills>' +
+    '<borders count="' + this.borders.length + '">' + this.borders.join('') + '</borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="' + this.xfs.length + '">' + this.xfs.join('') + '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>' +
+    '</styleSheet>';
+};
+
+
+/* =========================================================================
+ * 1人分のシートを組み立てる
+ * -------------------------------------------------------------------------
+ * 行の並び(31日の月なら現物とぴったり同じ)
+ *    1行目            令和８年 ７月　日報 / 名前
+ *    2行目            空
+ *    3行目            見出し(利用日は曜日の列までつながる)
+ *    4行目〜3+日数    その月の全日
+ *    4+日数           計
+ *    5+日数           空
+ *    6+日数           利用日数　：  n  日
+ *    7,8+日数         空
+ *    9+日数〜14+日数  注記6行
+ *    印刷範囲は A1:I(15+日数)
+ * ======================================================================= */
+
+/* NIPPO_NOTES（注記の文面）は日報の画面側で定義してある。 */
+
+var NIPPO_HEADERS = ['利用日', '', '体調', '開始時間', '終了時間', '昼等休憩', '時間数', '訓練・作業内容', '備考'];
+
+/* 表示形式・フォント・塗り・罫線をひととおり登録して、番号の表を返す */
+function nippoStyles(sb) {
+  /* ★いちばん先に既定のフォントを登録すること。
+     0番が既定として使われるので、ここを空けたままだと表全体が
+     見出し用のフォントで描かれてしまう(実際に一度そうなった)。 */
+  var fBase  = sb.font({ size: 11 });                        // ＭＳ Ｐゴシック 11
+  var fTitle = sb.font({ bold: true, size: 14 });
+  var fName  = sb.font({ bold: true, size: 12 });
+  var fHead  = sb.font({ size: 11, name: 'ＭＳ ゴシック' });
+  var fSmall = sb.font({ size: 10 });
+  var fRed   = sb.font({ size: 11, color: 'FF0000' });
+
+  var pHead = sb.fill('CCFFFF');    // 見出しの薄い水色
+  var pHol  = sb.fill('C5D9F1');    // 休業日の行の薄い青
+
+  var nDate = sb.numFmt('m"月"d"日"');
+  var nTime = 20;                   // 組み込み h:mm
+  var nSum  = sb.numFmt('[h]:mm');  // 24時間を超えるので角括弧が要る
+
+  /* 罫線は「左右上下それぞれ thin か medium か」で16通り。使う分だけ作る。 */
+  var B = {};
+  function bd(l, r, t, b) {
+    var k = l + '|' + r + '|' + t + '|' + b;
+    if (B[k] === undefined) B[k] = sb.border(l, r, t, b);
+    return B[k];
+  }
+
+  /* 表の中の1セル。col は1〜9、pos は 'head' | 'mid' | 'last' */
+  function cellBorder(col, pos) {
+    return bd(col === 1 ? 'medium' : 'thin',
+              col === 9 ? 'medium' : 'thin',
+              pos === 'head' ? 'medium' : 'thin',
+              pos === 'last' ? 'medium' : 'thin');
+  }
+
+  var thin = bd('thin', 'thin', 'thin', 'thin');
+
+  var S = { head: [], mid: [], last: [], hol: [], holLast: [], total: [] };
+
+  /* ★ここも0番が既定として使われる。何も指定していないセル(表の外側の
+     空白など)は全部これになるので、いちばん先に「素のセル」を登録する。
+     見出しを先に登録してしまい、ページ全体が水色になったことがある。 */
+  var stPlain = sb.xf({});
+
+  // --- 見出しの行 ---
+  for (var c = 1; c <= 9; c++) {
+    S.head.push(sb.xf({ fontId: fHead, fillId: pHead, borderId: cellBorder(c, 'head'),
+                        h: 'center', v: 'center' }));
+  }
+
+  // --- データの行(ふつう / 最終行 / 休業日) ---
+  ['mid', 'last', 'hol', 'holLast'].forEach(function (kind) {
+    var pos  = (kind === 'last' || kind === 'holLast') ? 'last' : 'mid';
+    var fill = (kind === 'hol'  || kind === 'holLast') ? pHol   : 0;
+    for (var c = 1; c <= 9; c++) {
+      var o = { fillId: fill, borderId: cellBorder(c, pos) };
+      if      (c === 1) { o.numFmtId = nDate; o.v = 'center'; }
+      else if (c === 2 || c === 3) { o.h = 'center'; o.v = 'center'; }
+      else if (c >= 4 && c <= 6)   { o.numFmtId = nTime; o.h = 'right'; o.v = 'center'; }
+      else if (c === 7)            { o.numFmtId = nTime; o.v = 'center'; }
+      else { o.fontId = fSmall; o.h = 'left'; o.v = 'top'; o.wrap = true; }
+      S[kind].push(sb.xf(o));
+    }
+  });
+
+  /* --- 計の行 -------------------------------------------------------
+     ★現物は A〜G までしか枠が無い(H・I には何も無い)。そこに合わせる。
+        表のいちばん下なので下辺は medium。 */
+  for (var c2 = 1; c2 <= 9; c2++) {
+    if (c2 >= 8) { S.total.push(stPlain); continue; }
+    var o2 = {
+      borderId: bd(c2 === 1 ? 'medium' : 'thin',
+                   c2 === 7 ? 'medium' : 'thin',
+                   'thin', 'medium'),
+      v: 'center'
+    };
+    if (c2 === 1) o2.h = 'center';
+    if (c2 === 7) o2.numFmtId = nSum;
+    S.total.push(sb.xf(o2));
+  }
+
+  /* --- 利用日数の行 -------------------------------------------------
+     ★現物は箱ではなく下線だけ。枠で囲むと見た目が変わるので合わせる。 */
+  var underline = bd('', '', '', 'thin');
+
+  S.title   = sb.xf({ fontId: fTitle });
+  S.name    = sb.xf({ fontId: fName, h: 'right' });
+  S.useLbl  = sb.xf({ borderId: underline, h: 'center', v: 'center' });
+  S.useNum  = sb.xf({ borderId: underline, h: 'center', v: 'center' });
+  S.useUnit = sb.xf({ borderId: underline, h: 'center', v: 'center' });
+  S.note    = stPlain;
+  S.noteRed = sb.xf({ fontId: fRed });
+  return S;
+}
+
+
+/* --- セル1つぶんのXML --------------------------------------------------- */
+function cStr(ref, s, text) {
+  if (text === '' || text === null || text === undefined) return cBlank(ref, s);
+  return '<c r="' + ref + '" s="' + s + '" t="inlineStr"><is><t xml:space="preserve">' +
+    xmlEsc(text) + '</t></is></c>';
+}
+function cNum(ref, s, v) {
+  if (v === null || v === undefined) return cBlank(ref, s);
+  return '<c r="' + ref + '" s="' + s + '"><v>' + v + '</v></c>';
+}
+function cFml(ref, s, f) {
+  return '<c r="' + ref + '" s="' + s + '"><f>' + xmlEsc(f) + '</f></c>';
+}
+function cBlank(ref, s) {
+  return '<c r="' + ref + '" s="' + s + '"/>';
+}
+
+/* --- 1人分のシートXML --------------------------------------------------- */
+function nippoSheetXml(book, S, isFirst) {
+  var days  = book.rows.length;
+  var rTop  = 4;                 // データの先頭行
+  var rBot  = 3 + days;          // データの最終行
+  var rTot  = 4 + days;          // 計
+  var rUse  = 6 + days;          // 利用日数
+  var rNote = 9 + days;          // 注記の先頭
+  var rEnd  = 15 + days;         // 印刷範囲の最終行
+
+  var out = [];
+
+  function row(n, attrs, cells) {
+    out.push('<row r="' + n + '"' + (attrs || '') + '>' + cells.join('') + '</row>');
+  }
+
+  // 1行目: 表題と名前
+  row(1, ' ht="17.25" customHeight="1"', [
+    cStr('A1', S.title, '令和' + toZen(book.year - 2018) + '年 ' + toZen(book.month) + '月　日報'),
+    cStr('I1', S.name, '名前　' + book.name)
+  ]);
+  // 2行目: 空
+  row(2, ' ht="14.25" customHeight="1"', []);
+
+  // 3行目: 見出し。A3:B3 は「利用日」がつながる。
+  var head = [];
+  for (var c = 1; c <= 9; c++) {
+    head.push(cStr(colName(c) + '3', S.head[c - 1], NIPPO_HEADERS[c - 1]));
+  }
+  row(3, ' ht="14.25" customHeight="1"', head);
+
+  // データの行
+  book.rows.forEach(function (d, i) {
+    var n    = rTop + i;
+    var last = (n === rBot);
+    var rest = !d.start && !d.end;
+    // ★報告がある日は、休業日でも通常の行として出す(臨時に開所した日)
+    var hol  = !!d.holiday && rest;
+    var stl  = hol ? (last ? S.holLast : S.hol)
+                   : (last ? S.last    : S.mid);
+
+    var sv = timeValue(d.start), ev = timeValue(d.end), kv = timeValue(d.kyukei);
+    var cells = [
+      cNum(colName(1) + n, stl[0], dateSerial(book.year, book.month, d.d)),
+      cStr(colName(2) + n, stl[1], d.w),
+      cStr(colName(3) + n, stl[2], d.taicho || ''),
+      cNum(colName(4) + n, stl[3], sv),
+      cNum(colName(5) + n, stl[4], ev),
+      cNum(colName(6) + n, stl[5], kv),
+      (sv !== null && ev !== null)
+        ? cFml(colName(7) + n, stl[6], 'E' + n + '-D' + n + '-F' + n)
+        : cBlank(colName(7) + n, stl[6]),
+      cStr(colName(8) + n, stl[7], d.sagyo || ''),
+      cStr(colName(9) + n, stl[8], hol ? d.holiday : (d.biko || ''))
+    ];
+    row(n, ' ht="27" customHeight="1"', cells);
+  });
+
+  // 計の行
+  var tot = [cStr('A' + rTot, S.total[0], '計')];
+  for (var c2 = 2; c2 <= 9; c2++) {
+    if (c2 === 7) tot.push(cFml('G' + rTot, S.total[6], 'SUM(G' + rTop + ':G' + rBot + ')'));
+    else          tot.push(cBlank(colName(c2) + rTot, S.total[c2 - 1]));
+  }
+  row(rTot, ' ht="14.25" customHeight="1"', tot);
+
+  // 利用日数の行
+  row(rUse, '', [
+    cStr('B' + rUse, S.useLbl,  '利用日数　：'),
+    cBlank('C' + rUse, S.useLbl),
+    cFml('D' + rUse, S.useNum, 'COUNT(D' + rTop + ':D' + rBot + ')'),
+    cStr('E' + rUse, S.useUnit, '日')
+  ]);
+
+  // 注記
+  NIPPO_NOTES.forEach(function (nt, i) {
+    row(rNote + i, '', [cStr('A' + (rNote + i), nt.red ? S.noteRed : S.note, nt.t)]);
+  });
+
+  var merges = ['A3:B3', 'A' + rTot + ':C' + rTot, 'B' + rUse + ':C' + rUse];
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
+    '<dimension ref="A1:I' + rEnd + '"/>' +
+    '<sheetViews><sheetView' + (isFirst ? ' tabSelected="1"' : '') +
+      ' workbookViewId="0"/></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="13.5"/>' +
+    '<cols>' +
+      '<col min="1" max="1" width="10.5" customWidth="1"/>' +
+      '<col min="2" max="2" width="6" customWidth="1"/>' +
+      '<col min="3" max="3" width="10.375" customWidth="1"/>' +
+      '<col min="4" max="7" width="13.25" customWidth="1"/>' +
+      '<col min="8" max="8" width="33.5" customWidth="1"/>' +
+      '<col min="9" max="9" width="23" customWidth="1"/>' +
+    '</cols>' +
+    '<sheetData>' + out.join('') + '</sheetData>' +
+    '<mergeCells count="' + merges.length + '">' +
+      merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') +
+    '</mergeCells>' +
+    '<printOptions horizontalCentered="1"/>' +
+    '<pageMargins left="0.5905511811" right="0.3937007874" top="0.5905511811" ' +
+      'bottom="0.5905511811" header="0.5118110236" footer="0.5118110236"/>' +
+    '<pageSetup paperSize="9" scale="69" orientation="portrait"/>' +
+    '</worksheet>';
+}
+
+
+/* =========================================================================
+ * ZIPを作る（無圧縮=storeで十分。xlsxはこれで問題なく開ける）
+ * -------------------------------------------------------------------------
+ * ★外部のライブラリは使わない。CDNから読み込む形にすると、
+ *   ネットの調子ひとつで職員が日報を出せなくなるため。
+ * ======================================================================= */
+var CRC_TABLE = (function () {
+  var t = new Int32Array(256);
+  for (var n = 0; n < 256; n++) {
+    var c = n;
+    for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  var c = -1;
+  for (var i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+
+function utf8(str) { return new TextEncoder().encode(str); }
+
+function zipStore(files) {
+  var parts = [], central = [], offset = 0;
+
+  function u16(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+  function u32(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
+
+  files.forEach(function (f) {
+    var name = utf8(f.name);
+    var data = utf8(f.data);
+    var crc  = crc32(data);
+
+    // ローカルヘッダー。フラグ 0x0800 = ファイル名がUTF-8であることの印。
+    var lh = [].concat(u32(0x04034b50), u16(20), u16(0x0800), u16(0),
+                       u16(0), u16(0x21),           // 時刻・日付(1980-01-01固定)
+                       u32(crc), u32(data.length), u32(data.length),
+                       u16(name.length), u16(0));
+    parts.push(new Uint8Array(lh), name, data);
+
+    var ch = [].concat(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0),
+                       u16(0), u16(0x21),
+                       u32(crc), u32(data.length), u32(data.length),
+                       u16(name.length), u16(0), u16(0), u16(0), u16(0),
+                       u32(0), u32(offset));
+    central.push(new Uint8Array(ch), name);
+
+    offset += lh.length + name.length + data.length;
+  });
+
+  var cdSize = central.reduce(function (a, b) { return a + b.length; }, 0);
+  var eocd = new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(cdSize), u32(offset), u16(0)));
+
+  var all = parts.concat(central, [eocd]);
+  var total = all.reduce(function (a, b) { return a + b.length; }, 0);
+  var out = new Uint8Array(total), pos = 0;
+  all.forEach(function (b) { out.set(b, pos); pos += b.length; });
+  return out;
+}
+
+
+/* =========================================================================
+ * 入口: 日報のブックを作って Uint8Array で返す
+ *   books = [{ name, year, month, rows:[{d,w,taicho,start,end,kyukei,sagyo,biko,holiday}] }]
+ * ======================================================================= */
+function buildNippoXlsx(books) {
+  var sb = new StyleBook();
+  var S  = nippoStyles(sb);
+
+  var used = {};
+  var sheets = books.map(function (b, i) {
+    // シート名に使えない文字を落とし、31文字まで。同じ名前は連番で分ける。
+    var nm = String(b.name || ('日報' + (i + 1))).replace(/[\[\]\*\/\\?:]/g, '_').slice(0, 31);
+    if (!nm) nm = '日報' + (i + 1);
+    if (used[nm]) { nm = nm.slice(0, 28) + '_' + (++used[nm]); } else { used[nm] = 1; }
+    return { name: nm, xml: nippoSheetXml(b, S, i === 0), rows: b.rows.length };
+  });
+
+  var sheetTags = sheets.map(function (s, i) {
+    return '<sheet name="' + xmlEsc(s.name) + '" sheetId="' + (i + 1) +
+           '" r:id="rId' + (i + 1) + '"/>';
+  }).join('');
+
+  /* 印刷範囲はブック側の定義名で持つ。シート名の ' は2つ重ねて逃がす。 */
+  var defined = sheets.map(function (s, i) {
+    var q = "'" + s.name.replace(/'/g, "''") + "'";
+    return '<definedName name="_xlnm.Print_Area" localSheetId="' + i + '">' +
+           xmlEsc(q + '!$A$1:$I$' + (15 + s.rows)) + '</definedName>';
+  }).join('');
+
+  var rels = sheets.map(function (s, i) {
+    return '<Relationship Id="rId' + (i + 1) +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"' +
+      ' Target="worksheets/sheet' + (i + 1) + '.xml"/>';
+  }).join('');
+
+  var overrides = sheets.map(function (s, i) {
+    return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml"' +
+      ' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+  }).join('');
+
+  var files = [
+    { name: '[Content_Types].xml', data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      overrides +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>' },
+
+    { name: '_rels/.rels', data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>' },
+
+    { name: 'xl/workbook.xml', data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheets>' + sheetTags + '</sheets>' +
+      (defined ? '<definedNames>' + defined + '</definedNames>' : '') +
+      /* ★数式の計算結果を持たせていないので、開いたときに必ず計算させる。
+         これが無いと、ソフトによっては時間数が空欄のまま見えることがある。 */
+      '<calcPr calcId="0" fullCalcOnLoad="1"/>' +
+      '</workbook>' },
+
+    { name: 'xl/_rels/workbook.xml.rels', data:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      rels +
+      '<Relationship Id="rId' + (sheets.length + 1) +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>' },
+
+    { name: 'xl/styles.xml', data: sb.toXml() }
+  ];
+
+  sheets.forEach(function (s, i) {
+    files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml', data: s.xml });
+  });
+
+  return zipStore(files);
+}
+
+
+/* =====================================================================
+ * 日報
+ * ---------------------------------------------------------------------
+ * 見る + 印刷 + Excelで出す。画面の上では直さない（2026-08-18にユーザーが決定）。
+ *
+ * ★サーバーには聞きに行かない。
+ *   「始業・終業管理」で使っている月次データ(monthData)に、体調・開始・終了・
+ *   休憩・作業・備考が全部そろっているので、そこから組み立てている。
+ *   通信を足すと、そのたびに5秒前後待たされるため。
+ *
+ * ★「計」と「利用日数」は現物のExcelと同じ数え方にしてある。
+ *   計       = 開始と終了が両方そろっている日の（終了−開始−昼等休憩）の合計
+ *   利用日数 = 開始時間がある日の数（現物の =COUNT(D4:D34) と同じ）
+ *   終業だけ出した日は利用日数に入らない。
+ * =================================================================== */
+const nippoMsg = document.getElementById('nippoMsg');
+let lastNippoSay = '';        // 日報の中身の読み上げ文（あとから読ませるため取っておく）
+
+/* 現物のExcelの下のほうに入っている注記。文面はそのまま写してある。 */
+const NIPPO_NOTES = [
+  { t: '利用された日の作業・訓練内容・体調・備考を記入して下さい', red: true },
+  { t: '作業内容：簡単で結構です（シートナンバーがあれば、記入して下さい）' },
+  { t: '体調：良好・不良等を記入してください' },
+  { t: '備考：作業に関しての反省・疑問点・その他思った事等（作業以外の事で感じた事とかでも結構です。）' },
+  { t: '　　　　自由に何でも記入してください。' },
+  { t: ' 病院・役所へ行かれた日は備考欄に時間帯をご記入下さい', red: true }
+];
+
+/* 半角数字を全角に。現物の表題が「令和８年 ７月　日報」なので合わせる。 */
+function toZen(n) {
+  return String(n).replace(/[0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0));
+}
+
+/* 月次データから、その人の1ヶ月ぶんを日報の形に組み直す */
+function nippoBookFor(name) {
+  const r = monthData;
+  if (!r) return null;
+  const u = (r.users || []).filter(x => x.name === name)[0];
+  if (!u) return null;
+
+  const mm = String(r.ym || '').match(/^(\d{4})-(\d{2})$/);
+  if (!mm) return null;
+
+  const byDay = u.byDay || {};
+  const rows = (r.days || []).map(day => {
+    const slot = byDay[String(day.d)] || {};
+    const s = slot.start, e = slot.end;
+    return {
+      d: day.d,
+      w: day.w,
+      taicho:  s ? (s.taicho || '') : '',
+      start:   s ? (s.time   || '') : '',
+      end:     e ? (e.time   || '') : '',
+      kyukei:  e ? (e.kyukei || '') : '',
+      sagyo:   e ? (e.sagyo  || '') : '',
+      biko:    e ? (e.biko   || '') : '',
+      holiday: day.holiday || ''
+    };
+  });
+
+  return { name: u.name, year: Number(mm[1]), month: Number(mm[2]), rows: rows };
+}
+
+/* 時間数（終了−開始−昼等休憩）。片方しか無い日は空欄にする。
+ * ★Excel側は数式 =E-D-F で出しているので、ここと必ず同じ結果になる。 */
+function nippoHours(row) {
+  const st = hhmmToMin(row.start);
+  const en = hhmmToMin(row.end);
+  if (st === null || en === null) return null;
+  return en - st - (hhmmToMin(row.kyukei) || 0);
+}
+
+function nippoTotals(book) {
+  let min = 0, useDays = 0;
+  book.rows.forEach(row => {
+    if (hhmmToMin(row.start) !== null) useDays++;   // 現物の COUNT(D列) と同じ
+    const h = nippoHours(row);
+    if (h !== null) min += h;                       // 現物の SUM(G列) と同じ
+  });
+  return { min: min, useDays: useDays };
+}
+
+/* 24時間を超えても「88:30」と出す（Excelの [h]:mm と同じ考え方） */
+function nippoTotalText(min) {
+  const sign = min < 0 ? '-' : '';
+  const a = Math.abs(min);
+  return sign + Math.floor(a / 60) + ':' + ('0' + (a % 60)).slice(-2);
+}
+
+function nippoCell(tag, text, cls) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  el.textContent = text == null ? '' : String(text);
+  return el;
+}
+
+function renderNippo(quiet) {
+  const box = document.getElementById('nippoSheet');
+  box.innerHTML = '';
+  if (!monthData) return;
+
+  const book = nippoBookFor(document.getElementById('userSelN').value);
+  if (!book) {
+    box.appendChild(nippoCell('p', '利用者を選んでください。'));
+    return;
+  }
+
+  // --- 表題と名前 ---
+  const head = document.createElement('div');
+  head.className = 'nippo-head';
+  head.appendChild(nippoCell('span',
+    '令和' + toZen(book.year - 2018) + '年 ' + toZen(book.month) + '月　日報', 'nippo-title'));
+  head.appendChild(nippoCell('span', '名前　' + book.name, 'nippo-name'));
+  box.appendChild(head);
+
+  // --- 表 ---
+  const table = document.createElement('table');
+  table.className = 'nippo-table';
+  table.appendChild(nippoCell('caption',
+    book.name + 'さんの' + book.year + '年' + book.month + '月の日報', 'sr-only'));
+
+  const colg = document.createElement('colgroup');
+  // 現物のExcelの列幅をそのまま割合にしてある（合計136.375）
+  [7.70, 4.40, 7.61, 9.72, 9.72, 9.72, 9.72, 24.56, 16.85].forEach(w => {
+    const c = document.createElement('col');
+    c.style.width = w + '%';
+    colg.appendChild(c);
+  });
+  table.appendChild(colg);
+
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  // ★「利用日」は現物では曜日の列までつながっている（A3:B3の結合）
+  const th0 = nippoCell('th', '利用日');
+  th0.colSpan = 2;
+  th0.scope = 'col';
+  htr.appendChild(th0);
+  ['体調', '開始時間', '終了時間', '昼等休憩', '時間数', '訓練・作業内容', '備考'].forEach(t => {
+    const th = nippoCell('th', t);
+    th.scope = 'col';
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  book.rows.forEach(row => {
+    const rest = !row.start && !row.end;
+    const hol  = !!row.holiday && rest;    // 報告がある日は、休業日でもふつうの行にする
+    const tr = document.createElement('tr');
+    if (hol) tr.className = 'hol';
+
+    tr.appendChild(nippoCell('td', book.month + '月' + row.d + '日', 'c-day'));
+    tr.appendChild(nippoCell('td', row.w, 'c-week'));
+    tr.appendChild(nippoCell('td', row.taicho, 'c-tai'));
+    tr.appendChild(nippoCell('td', row.start, 'c-time'));
+    tr.appendChild(nippoCell('td', row.end, 'c-time'));
+    tr.appendChild(nippoCell('td', row.kyukei, 'c-time'));
+
+    const h = nippoHours(row);
+    tr.appendChild(nippoCell('td', h === null ? '' : minToHHMM(h), 'c-time'));
+
+    tr.appendChild(nippoCell('td', row.sagyo, 'c-text'));
+    tr.appendChild(nippoCell('td', hol ? row.holiday : row.biko, 'c-text'));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  const sum = nippoTotals(book);
+
+  const tfoot = document.createElement('tfoot');
+  const ftr = document.createElement('tr');
+  const lbl = nippoCell('th', '計', 't-lbl');
+  lbl.colSpan = 3;
+  lbl.scope = 'row';
+  ftr.appendChild(lbl);
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', nippoTotalText(sum.min), 't-sum'));
+  ftr.appendChild(nippoCell('td', '', 't-none'));
+  ftr.appendChild(nippoCell('td', '', 't-none'));
+  tfoot.appendChild(ftr);
+  table.appendChild(tfoot);
+
+  box.appendChild(table);
+
+  // --- 利用日数 ---
+  const use = document.createElement('p');
+  use.className = 'nippo-use';
+  use.appendChild(nippoCell('span', '利用日数　：', 'lbl'));
+  use.appendChild(nippoCell('span', String(sum.useDays)));
+  use.appendChild(document.createTextNode(' '));
+  use.appendChild(nippoCell('span', '日'));
+  box.appendChild(use);
+
+  // --- 注記 ---
+  const notes = document.createElement('div');
+  notes.className = 'nippo-notes';
+  NIPPO_NOTES.forEach(n => notes.appendChild(nippoCell('p', n.t, n.red ? 'red' : '')));
+  box.appendChild(notes);
+
+  lastNippoSay = book.name + 'さんの' + book.year + '年' + book.month + '月の日報です。利用日数'
+    + sum.useDays + '日、合計' + nippoTotalText(sum.min) + '。';
+  if (!quiet) announce(lastNippoSay);
+}
+
+/* ★タブを押したときの「日報を開きました。」に消されないよう、
+ *   少し待ってから中身を読ませる。2026-08-14・08-18に同じ形で3回踏んでいる。 */
+function sayNippo() {
+  if (lastNippoSay) announce(lastNippoSay);
+}
+
+/* --- Excelで保存 ------------------------------------------------------ */
+function nippoFileName(all) {
+  const ym = (monthData && monthData.ym) || '';
+  return '日報 ' + ym + ' ' + (all ? '全員' : document.getElementById('userSelN').value) + '.xlsx';
+}
+
+function saveBlob(bytes, filename) {
+  const blob = new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+}
+
+function downloadNippoXlsx(all) {
+  clearError(nippoMsg);
+  if (!monthData) {
+    showError(nippoMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
+    return;
+  }
+  const books = all
+    ? (monthData.users || []).map(u => nippoBookFor(u.name)).filter(b => b)
+    : [nippoBookFor(document.getElementById('userSelN').value)].filter(b => b);
+
+  if (!books.length) {
+    showError(nippoMsg, '出せる日報がありません。利用者と月を選び直してください。');
+    return;
+  }
+  try {
+    const name = nippoFileName(all);
+    saveBlob(buildNippoXlsx(books), name);
+    announce(name + ' を保存しました。' +
+      (all ? '利用者' + books.length + '名分が1つのファイルに入っています。' : ''));
+  } catch (e) {
+    showError(nippoMsg, 'Excelファイルを作れませんでした。「更新」を押して、もう一度お試しください。');
+  }
+}
+
+document.getElementById('btnNippoReload').addEventListener('click', loadMonth);
+document.getElementById('userSelN').addEventListener('change', () => renderNippo());
+document.getElementById('ymN').addEventListener('change', () => {
+  document.getElementById('ym').value  = document.getElementById('ymN').value;
+  document.getElementById('ym2').value = document.getElementById('ymN').value;
+  loadMonth();
+});
+document.getElementById('btnNippoPrint').addEventListener('click', () => {
+  if (!monthData) {
+    showError(nippoMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
+    return;
+  }
+  window.print();
+});
+document.getElementById('btnNippoXlsx').addEventListener('click', () => downloadNippoXlsx(false));
+document.getElementById('btnNippoXlsxAll').addEventListener('click', () => downloadNippoXlsx(true));
+
 
 /* =====================================================================
  * 代理で入力（職員が利用者の代わりに報告を入れる）
