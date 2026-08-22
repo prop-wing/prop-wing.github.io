@@ -538,7 +538,7 @@
   table.nippo-table td.c-day  { text-align: right; white-space: nowrap; }
   table.nippo-table td.c-week { text-align: center; }
   table.nippo-table td.c-tai  { text-align: center; }
-  table.nippo-table td.c-time { text-align: right; font-variant-numeric: tabular-nums; }
+  table.nippo-table td.c-time { text-align: center; font-variant-numeric: tabular-nums; }
   table.nippo-table td.c-text {
     text-align: left;
     vertical-align: top;
@@ -565,7 +565,7 @@
   }
   table.nippo-table tfoot th.t-lbl { text-align: center; }
   table.nippo-table tfoot td.t-sum {
-    text-align: right;
+    text-align: center;
     font-variant-numeric: tabular-nums;
     border-right: 2px solid #333;
   }
@@ -1366,7 +1366,10 @@ function renderHome(quiet) {
 
   const rows = r.rows || [];
   const yet  = r.yet  || [];
-  const noRep = rows.filter(x => !x.start).length;   // 本日まだ始業がない人
+  /* ★通所日でない方は「未報告」に数えない(2026-08-22)。
+     曜日の設定(ウィング利用者シートE列)と利用者の休みシートで決まり、
+     サーバーが理由を off に入れて返してくる。数え方はサーバーと同じ。 */
+  const noRep = rows.filter(x => !x.start && !x.off).length;   // 本日まだ始業がない人
 
   setTile('tileYet', 'numYet', yet.length);
   setTile('tileNo',  'numNo',  noRep, rest);
@@ -1394,9 +1397,10 @@ function renderHome(quiet) {
     th.textContent = x.name;
     tr.appendChild(th);
 
-    // 始業
+    // 始業。通所日でない方は、その理由を出して注意色にしない。
     if (x.start) tr.appendChild(td(x.start.time));
     else if (rest) tr.appendChild(tdTag('—', 'none'));
+    else if (x.off) tr.appendChild(tdTag(x.off, 'none'));
     else tr.appendChild(tdTag('未報告', 'yet'));
 
     tr.appendChild(td(x.start ? x.start.taicho : ''));
@@ -1474,7 +1478,7 @@ function renderHomeCounts() {
   const rows = homeData.rows || [];
   const yet  = (homeData.yet || []).filter(it => !it.replies.length);
   setTile('tileYet', 'numYet', yet.length);
-  setTile('tileNo',  'numNo',  rows.filter(x => !x.start).length, !!homeData.holiday);
+  setTile('tileNo',  'numNo',  rows.filter(x => !x.start && !x.off).length, !!homeData.holiday);
 
   // 表の「返信」欄も、その報告の印だけを書き換える
   const byUid = {};
@@ -1795,14 +1799,20 @@ function renderUser(quiet) {
 
   // --- 日ごとの表 ---
   const byDay = u.byDay || {};
+
+  /* ★通所日でない日(曜日の設定・臨時の休み)。休業日と同じ薄い灰色にして、
+     抜けの注意色にはしない。どの日がそれに当たるかはサーバーが決めている。 */
+  const offMap = {};
+  (u.offDays || []).forEach(o => { offMap[o.d] = o.why || '通所日以外'; });
   (r.days || []).forEach(day => {
     const slot = byDay[String(day.d)] || {};
     const hasS = !!slot.start, hasE = !!slot.end;
     const countable = day.d <= (r.lastCount || 0);
 
     const tr = document.createElement('tr');
-    if (day.holiday && !hasS && !hasE)      tr.className = 'none';
-    else if (countable && !(hasS && hasE))  tr.className = 'miss';
+    const offWhy = offMap[day.d] || '';
+    if ((day.holiday || offWhy) && !hasS && !hasE)      tr.className = 'none';
+    else if (countable && !(hasS && hasE) && !offWhy)   tr.className = 'miss';
 
     tr.appendChild(td(day.d + '日', 'day'));
     tr.appendChild(td(day.w));
@@ -1824,7 +1834,8 @@ function renderUser(quiet) {
     tr.appendChild(td(hasE ? slot.end.sagyo : '', 'wrap'));
 
     // 備考。報告がない休業日は、その理由をここに出す。
-    const bikoCell = td(hasE ? slot.end.biko : (!hasS && !hasE ? (day.holiday || '') : ''), 'wrap');
+    const bikoCell = td(hasE ? slot.end.biko
+                          : (!hasS && !hasE ? (day.holiday || offWhy || '') : ''), 'wrap');
     tr.appendChild(bikoCell);
 
     // 返信
@@ -2072,12 +2083,12 @@ var NIPPO_COLS = [
   { head: '利用日',         w: 10.5   },
   { head: '',               w: 6      },   // 曜日。見出しは「利用日」がここまでつながる
   { head: '体調',           w: 10.375 },
-  { head: '開始時間',       w: 13.25  },
-  { head: '終了時間',       w: 13.25  },
-  { head: '昼等休憩',       w: 13.25  },
-  { head: '時間数',         w: 13.25  },
+  { head: '開始時間',       w: 10     },
+  { head: '終了時間',       w: 10     },
+  { head: '昼等休憩',       w: 10     },
+  { head: '時間数',         w: 10     },
   { head: '訓練・作業内容', w: 33.5   },
-  { head: '備考',           w: 23     }
+  { head: '備考',           w: 36     }
 ];
 
 /* 表示形式・フォント・塗り・罫線をひととおり登録して、番号の表を返す */
@@ -2138,8 +2149,8 @@ function nippoStyles(sb) {
       var o = { fillId: fill, borderId: cellBorder(c, pos) };
       if      (c === 1) { o.numFmtId = nDate; o.v = 'center'; }
       else if (c === 2 || c === 3) { o.h = 'center'; o.v = 'center'; }
-      else if (c >= 4 && c <= 6)   { o.numFmtId = nTime; o.h = 'right'; o.v = 'center'; }
-      else if (c === 7)            { o.numFmtId = nTime; o.v = 'center'; }
+      else if (c >= 4 && c <= 6)   { o.numFmtId = nTime; o.h = 'center'; o.v = 'center'; }
+      else if (c === 7)            { o.numFmtId = nTime; o.h = 'center'; o.v = 'center'; }
       else { o.fontId = fSmall; o.h = 'left'; o.v = 'top'; o.wrap = true; }
       S[kind].push(sb.xf(o));
     }
@@ -2157,7 +2168,7 @@ function nippoStyles(sb) {
       v: 'center'
     };
     if (c2 === 1) o2.h = 'center';
-    if (c2 === 7) o2.numFmtId = nSum;
+    if (c2 === 7) { o2.numFmtId = nSum; o2.h = 'center'; }
     S.total.push(sb.xf(o2));
   }
 
