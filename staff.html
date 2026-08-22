@@ -246,6 +246,21 @@
   }
   /* 名前は <th scope="row"> にしてあるので、td だけを指定すると当たらない */
   table.grid tbody th.nm { font-weight: 700; white-space: nowrap; background: #fff; }
+
+  /* メイン画面の名前。押すと「利用者ごとに見る」へ飛ぶ(2026-08-23)。
+     見た目はリンク、中身はボタン(ページ移動ではなく画面内の切り替えのため)。 */
+  button.namelink {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-weight: 700;
+    color: #1558b0;
+    text-decoration: underline;
+    cursor: pointer;
+    text-align: left;
+  }
+  button.namelink:hover { color: #0b3d82; }
   table.grid tr.none th, table.grid tr.none td { background: #fbfbfc; color: var(--muted); }
   table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -1222,6 +1237,10 @@ const loaded = { home: false, list: false, month: false };
 const stale  = { home: false, list: false, month: false };
 
 let mainTabs = null, attendTabs = null, activeSub = 'sub-date';
+/* メイン画面の名前から飛んできたときに選ぶ利用者。
+   月次データがまだ読めていないと userSel に選択肢が無いので、
+   読み込みが終わったところで選び直すために覚えておく。 */
+let pendingUser = '';
 let activeMain = 'tab-home';
 
 function enterApp() {
@@ -1258,6 +1277,20 @@ function onAttendTab(id) {
     if (!loaded.month || stale.month) loadMonth();
     else if (id === 'sub-user') renderUser();
   }
+}
+
+/* その利用者の「利用者ごとに見る」へ飛ぶ。
+ * メイン画面の名前と、月次の「この人を見る」の両方から呼んでいる。
+ * ★月次データがまだ無ければ loadMonth が読み込む。そのあと
+ *   利用者を選び直せるように pendingUser に覚えておく。 */
+function gotoUser(name) {
+  pendingUser = name;
+  const sel = document.getElementById('userSel');
+  if (sel && Array.from(sel.options).some(o => o.value === name)) sel.value = name;
+
+  attendTabs.select(document.getElementById('sub-user'), false);
+  mainTabs.select(document.getElementById('tab-attend'), true);
+  announce(name + 'さんの日ごとの報告を開きました。');
 }
 
 /* =====================================================================
@@ -1394,7 +1427,14 @@ function renderHome(quiet) {
     const th = document.createElement('th');
     th.setAttribute('scope', 'row');
     th.className = 'nm';
-    th.textContent = x.name;
+    /* ★名前を押すと、その人の「利用者ごとに見る」へ飛ぶ(2026-08-23)。 */
+    const nb = document.createElement('button');
+    nb.type = 'button';
+    nb.className = 'namelink';
+    nb.textContent = x.name;
+    nb.setAttribute('aria-label', x.name + 'さんの日ごとの報告を見る');
+    nb.addEventListener('click', () => gotoUser(x.name));
+    th.appendChild(nb);
     tr.appendChild(th);
 
     // 始業。通所日でない方は、その理由を出して注意色にしない。
@@ -1634,7 +1674,8 @@ function fillSelectors(r) {
       o.textContent = u.name;
       us.appendChild(o);
     });
-    if (keep && (r.users || []).some(u => u.name === keep)) us.value = keep;
+    const want = (id === 'userSel' && pendingUser) ? pendingUser : keep;
+    if (want && (r.users || []).some(u => u.name === want)) us.value = want;
   });
 }
 
@@ -1755,11 +1796,7 @@ function renderMonth(quiet) {
     b.className = 'mini';
     b.textContent = 'この人を見る';
     b.setAttribute('aria-label', u.name + 'さんの日ごとの報告を見る');
-    b.addEventListener('click', () => {
-      document.getElementById('userSel').value = u.name;
-      attendTabs.select(document.getElementById('sub-user'), true);
-      renderUser();
-    });
+    b.addEventListener('click', () => gotoUser(u.name));
     bt.appendChild(b);
     tr.appendChild(bt);
 
@@ -1778,6 +1815,7 @@ function renderUser(quiet) {
   if (!r) return;
 
   const name = document.getElementById('userSel').value;
+  pendingUser = '';          // 飛び先はここで使い切る
   const u = (r.users || []).filter(x => x.name === name)[0];
   if (!u) { sum.textContent = '利用者を選んでください。'; return; }
 

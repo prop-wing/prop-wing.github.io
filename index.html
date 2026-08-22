@@ -87,6 +87,12 @@
     margin: -4px 0 8px;
   }
 
+  /* ★日付プルダウンの下の注意書きだけは上に詰めない。
+     .hint は本来ラベルの直下用で margin-top が負なので、
+     select のフォーカス枠(3px + offset 2px)と重なってしまう
+     (2026-08-23にユーザーが実機で発見)。 */
+  #targetNote { margin-top: 10px; }
+
   input[type="text"],
   input[type="password"],
   select,
@@ -530,6 +536,12 @@
     <label for="time">時刻</label>
     <select id="time"></select>
 
+    <!-- ★前回と同じ時刻をすぐ入れられるようにする(2026-08-23にユーザーが要望)。
+         押したときだけ入る。自動では入れない(違う日もあるため)。 -->
+    <div class="suggest hidden" id="lastWrap" role="group" aria-label="前回と同じ時刻を入れる">
+      <button type="button" id="btnLast"></button>
+    </div>
+
     <!-- ===== 始業のときだけ出る ===== -->
     <div id="sec-start" class="hidden">
       <p class="label" id="lbl-taicho">体調</p>
@@ -860,7 +872,7 @@ async function doLogin() {
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
-      enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent);
+      enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent, r.last);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
       document.getElementById('userNo').focus();
@@ -1059,6 +1071,9 @@ function renderSagyoSuggest(list) {
  *   実際に保存される文章をそのまま見せている。
  * --------------------------------------------------------------------- */
 let currentRoutines = [];      // 本人の全曜日ぶん
+/* 前に出した報告の時刻。{ start, end, kyukei }。
+   「前回と同じにする」ボタンに使う。サーバーが応答に相乗りさせてくる。 */
+let currentLast = {};
 
 function todayRoutines() {
   // ★選んだ日の曜日で絞る。過去の日を報告するときも、その日の予定が出る。
@@ -1128,11 +1143,12 @@ function bikoSentence() {
     : '備考は記入なしです。';
 }
 
-function enterReport(name, today, sagyoList, routines, recent) {
+function enterReport(name, today, sagyoList, routines, recent, last) {
   currentName = name;
   if (sagyoList !== undefined) renderSagyoSuggest(sagyoList);
   if (routines  !== undefined) currentRoutines = routines || [];
   if (recent    !== undefined && recent) currentRecent = recent;
+  if (last      !== undefined && last) currentLast = last;
   document.getElementById('greet').textContent = name + ' さん';
 
   /* サーバーが直近8日ぶんを返してくれない古い応答でも動くようにしておく。
@@ -1198,6 +1214,48 @@ document.querySelectorAll('.choice input').forEach(r => {
   r.addEventListener('change', () => setTaicho(r.value));
 });
 
+/* 「前回と同じにする」ボタン。区分に合わせて中身と文言を作り直す。
+ * ★押したときだけ入る。自動では入れない（違う日もあるため。2026-08-23にユーザーが指示）。
+ * ★前回の値がプルダウンの選択肢に無いときはボタンごと出さない
+ *   （古い報告や、選択肢を変えたあとに備える）。 */
+function renderLastButton() {
+  const wrap = document.getElementById('lastWrap');
+  const btn  = document.getElementById('btnLast');
+  const timeSel = document.getElementById('time');
+  const kySel   = document.getElementById('kyukei');
+  const L = currentLast || {};
+  const inList = (sel, v) => Array.from(sel.options).some(o => o.value === v);
+
+  let time = '', kyukei = '', label = '';
+  if (currentKubun === '始業') {
+    time  = L.start || '';
+    label = '前回と同じ ' + time + ' にする';
+  } else {
+    time   = L.end    || '';
+    kyukei = L.kyukei || '';
+    label  = '前回と同じ ' + time + (kyukei ? '・昼等休憩 ' + kyukei : '') + ' にする';
+  }
+
+  const ok = time && inList(timeSel, time) && (!kyukei || inList(kySel, kyukei));
+  wrap.classList.toggle('hidden', !ok);
+  if (!ok) return;
+
+  btn.textContent = label;
+  btn.setAttribute('aria-label', label);
+}
+
+document.getElementById('btnLast').addEventListener('click', () => {
+  const L = currentLast || {};
+  if (currentKubun === '始業') {
+    document.getElementById('time').value = L.start;
+    announce('時刻を ' + L.start + ' にしました。');
+  } else {
+    document.getElementById('time').value = L.end;
+    if (L.kyukei) document.getElementById('kyukei').value = L.kyukei;
+    announce('時刻を ' + L.end + '、昼等休憩を ' + (L.kyukei || '未選択') + ' にしました。');
+  }
+});
+
 function setKubun(k) {
   currentKubun = k;
   paintChoice('.kubun', 'kubun', k);
@@ -1206,6 +1264,8 @@ function setKubun(k) {
    * 関係のない欄を出しておくと迷わせるので、まるごと出し分ける。 */
   document.getElementById('sec-start').classList.toggle('hidden', k !== '始業');
   document.getElementById('sec-end').classList.toggle('hidden', k !== '終業');
+
+  renderLastButton();   // 前回と同じ時刻のボタンも、区分に合わせて作り直す
 
   // すでに報告済みの区分を選んだら知らせる。
   // 訂正したい場合もあるので、止めはせず案内だけにする。
@@ -1260,6 +1320,7 @@ function finishSent(r, f) {
   currentToday = targetEntry();
   if (r.sagyoList) renderSagyoSuggest(r.sagyoList);
   if (r.routines)  currentRoutines = r.routines;
+  if (r.last)      currentLast = r.last;
   renderSummary([
     ['名前', r.name || currentName],
     ['日付', targetEntry().label],
@@ -1378,7 +1439,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday, undefined, undefined, currentRecent));
+document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday, undefined, undefined, currentRecent, undefined));
 
 document.getElementById('biko').addEventListener('input', updateBikoPreview);
 
@@ -1643,7 +1704,7 @@ buildKyukeiOptions();
   show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
     const r = await callApiRetry({ action: 'me', token }, 2, 'name');
-    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent); return; }
+    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent, r.last); return; }
     // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');
