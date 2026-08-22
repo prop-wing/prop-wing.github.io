@@ -2055,7 +2055,30 @@ StyleBook.prototype.toXml = function () {
 
 /* NIPPO_NOTES（注記の文面）は日報の画面側で定義してある。 */
 
-var NIPPO_HEADERS = ['利用日', '', '体調', '開始時間', '終了時間', '昼等休憩', '時間数', '訓練・作業内容', '備考'];
+/* =========================================================================
+ * ★日報の「列」を決めているのはここ1か所だけ。
+ *   画面・印刷・Excel の3つとも、この表から作っている。
+ *   見出しの文字を変えたい / 列の幅を変えたいときは、ここだけ直せばよい。
+ *
+ *   w は Excelの列幅（現物の日報を実測した値）。
+ *   画面の幅は、この数字の「比」から自動で出しているので、
+ *   ここを変えれば画面もExcelも同じ見た目になる。
+ *
+ *   ★列の数(9)を増やし減らしする場合は、ここだけでは済まない。
+ *     nippoSheetXml のセルの並び・結合(A3:B3など)・renderNippo の
+ *     行の組み立ても直すことになる。
+ * ======================================================================= */
+var NIPPO_COLS = [
+  { head: '利用日',         w: 10.5   },
+  { head: '',               w: 6      },   // 曜日。見出しは「利用日」がここまでつながる
+  { head: '体調',           w: 10.375 },
+  { head: '開始時間',       w: 13.25  },
+  { head: '終了時間',       w: 13.25  },
+  { head: '昼等休憩',       w: 13.25  },
+  { head: '時間数',         w: 13.25  },
+  { head: '訓練・作業内容', w: 33.5   },
+  { head: '備考',           w: 23     }
+];
 
 /* 表示形式・フォント・塗り・罫線をひととおり登録して、番号の表を返す */
 function nippoStyles(sb) {
@@ -2203,7 +2226,7 @@ function nippoSheetXml(book, S, isFirst) {
   // 3行目: 見出し。A3:B3 は「利用日」がつながる。
   var head = [];
   for (var c = 1; c <= 9; c++) {
-    head.push(cStr(colName(c) + '3', S.head[c - 1], NIPPO_HEADERS[c - 1]));
+    head.push(cStr(colName(c) + '3', S.head[c - 1], NIPPO_COLS[c - 1].head));
   }
   row(3, ' ht="14.25" customHeight="1"', head);
 
@@ -2271,14 +2294,10 @@ function nippoSheetXml(book, S, isFirst) {
     '<sheetViews><sheetView' + (isFirst ? ' tabSelected="1"' : '') +
       ' workbookViewId="0"/></sheetViews>' +
     '<sheetFormatPr defaultRowHeight="13.5"/>' +
-    '<cols>' +
-      '<col min="1" max="1" width="10.5" customWidth="1"/>' +
-      '<col min="2" max="2" width="6" customWidth="1"/>' +
-      '<col min="3" max="3" width="10.375" customWidth="1"/>' +
-      '<col min="4" max="7" width="13.25" customWidth="1"/>' +
-      '<col min="8" max="8" width="33.5" customWidth="1"/>' +
-      '<col min="9" max="9" width="23" customWidth="1"/>' +
-    '</cols>' +
+    '<cols>' + NIPPO_COLS.map(function (c, i) {
+      return '<col min="' + (i + 1) + '" max="' + (i + 1) +
+             '" width="' + c.w + '" customWidth="1"/>';
+    }).join('') + '</cols>' +
     '<sheetData>' + out.join('') + '</sheetData>' +
     '<mergeCells count="' + merges.length + '">' +
       merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join('') +
@@ -2564,24 +2583,25 @@ function renderNippo(quiet) {
   table.appendChild(nippoCell('caption',
     book.name + 'さんの' + book.year + '年' + book.month + '月の日報', 'sr-only'));
 
+  // 列の幅は NIPPO_COLS の比から出す。Excelと同じ見た目になる。
   const colg = document.createElement('colgroup');
-  // 現物のExcelの列幅をそのまま割合にしてある（合計136.375）
-  [7.70, 4.40, 7.61, 9.72, 9.72, 9.72, 9.72, 24.56, 16.85].forEach(w => {
-    const c = document.createElement('col');
-    c.style.width = w + '%';
-    colg.appendChild(c);
+  const wSum = NIPPO_COLS.reduce((a, c) => a + c.w, 0);
+  NIPPO_COLS.forEach(c => {
+    const el = document.createElement('col');
+    el.style.width = (Math.round(c.w / wSum * 10000) / 100) + '%';
+    colg.appendChild(el);
   });
   table.appendChild(colg);
 
   const thead = document.createElement('thead');
   const htr = document.createElement('tr');
-  // ★「利用日」は現物では曜日の列までつながっている（A3:B3の結合）
-  const th0 = nippoCell('th', '利用日');
+  // ★「利用日」は現物では曜日の列までつながっている（Excel側の A3:B3 の結合と同じ）
+  const th0 = nippoCell('th', NIPPO_COLS[0].head);
   th0.colSpan = 2;
   th0.scope = 'col';
   htr.appendChild(th0);
-  ['体調', '開始時間', '終了時間', '昼等休憩', '時間数', '訓練・作業内容', '備考'].forEach(t => {
-    const th = nippoCell('th', t);
+  NIPPO_COLS.slice(2).forEach(c => {
+    const th = nippoCell('th', c.head);
     th.scope = 'col';
     htr.appendChild(th);
   });
