@@ -605,6 +605,61 @@
   .nippo-notes p.red { color: #e00000; }
 
   /* =====================================================================
+   * 実績記録票（様式17 就労継続支援提供実績記録票）
+   * ---------------------------------------------------------------------
+   * 厚労省のひな形は「列幅1のマス目を結合して作る」方眼レイアウトなので、
+   * こちらは同じ見た目になるよう、結合ぶんの列数を幅の比にしてある
+   * （JISSEKI_COLS の w が、ひな形で何列ぶんかを表す）。
+   * =================================================================== */
+  .jisseki { overflow-x: auto; }
+  .jisseki-sheet { min-width: 900px; }
+
+  .jisseki-top {
+    display: flex; align-items: flex-end; gap: 16px;
+    margin-bottom: 6px;
+  }
+  .jisseki-ym    { font-size: 14px; white-space: nowrap; }
+  .jisseki-title { flex: 1; text-align: center; font-size: 19px; font-weight: 700; }
+
+  table.jisseki-info, table.jisseki-table, table.jisseki-foot, table.jisseki-add {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    font-size: 13px;
+  }
+  table.jisseki-info td, table.jisseki-table th, table.jisseki-table td,
+  table.jisseki-foot td, table.jisseki-add td {
+    border: 1px solid #333;
+    padding: 2px 4px;
+    text-align: center;
+    vertical-align: middle;
+    word-break: break-all;
+  }
+  table.jisseki-info { margin-bottom: 8px; }
+  table.jisseki-info td.lbl { background: #f2f2f2; font-size: 12px; }
+  table.jisseki-info td.val { text-align: left; }
+  table.jisseki-info td.none { border: none; background: transparent; }
+
+  table.jisseki-table th {
+    background: #f2f2f2;
+    font-weight: 400;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  table.jisseki-table tbody td { height: 26px; }
+  table.jisseki-table td.j-time { font-variant-numeric: tabular-nums; }
+  table.jisseki-table tr.j-rest td { background: #f7f7f7; }
+
+  table.jisseki-foot td { height: 22px; font-size: 12px; }
+  table.jisseki-add  td { height: 24px; font-size: 12px; text-align: left; }
+  table.jisseki-add td.lbl { background: #f2f2f2; text-align: center; }
+
+  .jisseki-page { margin-top: 6px; text-align: right; font-size: 12px; }
+
+  /* 外枠だけ太くする（ひな形と同じ見え方にするため） */
+  table.jisseki-table, table.jisseki-foot { border: 2px solid #333; }
+
+  /* =====================================================================
    * 印刷（A4縦1枚に収める）
    * ---------------------------------------------------------------------
    * ★日報のところだけを残して、他は見えなくする。
@@ -616,8 +671,29 @@
 
     body { background: #fff; padding: 0; }
     body * { visibility: hidden; }
-    #nippoSheet, #nippoSheet * { visibility: visible; }
-    #nippoSheet {
+
+    /* ★どちらを紙に出すかは、印刷を始める直前に body のクラスで決める。
+       日報と実績記録票の2つがあるため（2026-08-23に実績記録票を足した）。 */
+    body.print-jisseki #jissekiSheet,
+    body.print-jisseki #jissekiSheet * { visibility: visible; }
+    body.print-jisseki #jissekiSheet {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+      overflow: visible;
+    }
+    body.print-jisseki .jisseki-sheet { min-width: 0; }
+    body.print-jisseki table.jisseki-info,
+    body.print-jisseki table.jisseki-table,
+    body.print-jisseki table.jisseki-foot,
+    body.print-jisseki table.jisseki-add { font-size: 8pt; }
+    body.print-jisseki table.jisseki-table th { font-size: 7pt; }
+    body.print-jisseki table.jisseki-table tbody td { height: 6.6mm; }
+    body.print-jisseki .jisseki-title { font-size: 13pt; }
+
+    body.print-nippo #nippoSheet,
+    body.print-nippo #nippoSheet * { visibility: visible; }
+    body.print-nippo #nippoSheet {
       position: absolute;
       left: 0; top: 0;
       width: 100%;
@@ -723,6 +799,8 @@
               aria-controls="panel-attend" aria-selected="false" tabindex="-1">始業・終業管理</button>
       <button type="button" role="tab" id="tab-nippo"
               aria-controls="panel-nippo"  aria-selected="false" tabindex="-1">日報</button>
+      <button type="button" role="tab" id="tab-jisseki"
+              aria-controls="panel-jisseki" aria-selected="false" tabindex="-1">実績記録票</button>
     </div>
 
     <!-- ---------- メイン（本日のダッシュボード） ---------- -->
@@ -912,6 +990,44 @@
       <div id="nippoMsg" class="msg msg-error hidden"></div>
 
       <div id="nippoSheet" class="nippo" role="region" aria-live="off" aria-labelledby="tab-nippo"></div>
+    </div>
+
+    <!-- ---------- 実績記録票（様式17 就労継続支援提供実績記録票） ----------
+         ★市町村へ提出する様式。厚労省のひな形(0329006.xls「就労継続支援」シート)を
+           そのまま画面に起こしてある。PDFで提出するよう指定されているので、
+           印刷画面から「PDFに保存」を選ぶ形にしてある。
+         ★通信はしない。始業・終業管理と同じ月次データから組み立てている。
+         ★行は土日を外した月〜金（2026-08-23にユーザーが指示。土日は絶対閉所日）。
+           様式の表は25行しかないので、月〜金だけなら必ず1枚に収まる。 -->
+    <div id="panel-jisseki" role="tabpanel" tabindex="-1" aria-labelledby="tab-jisseki" class="hidden">
+      <div class="bar">
+        <label class="inline" for="ymJ">月
+          <select id="ymJ" aria-label="月"></select>
+        </label>
+        <label class="inline" for="userSelJ">利用者
+          <select id="userSelJ" aria-label="利用者"></select>
+        </label>
+        <span style="margin-right:auto;"></span>
+        <button type="button" id="btnJissekiReload" class="btn-small">更新</button>
+      </div>
+
+      <div class="bar">
+        <button type="button" id="btnJissekiPdf" class="btn-small">PDFで保存する（印刷）</button>
+      </div>
+
+      <p class="hint">
+        押すと印刷の画面が開きます。<strong>送信先（プリンター）を「PDFに保存」にすると
+        PDFファイルになります。</strong>A4縦・1枚です。<br>
+        自動で入るのは <strong>年月・氏名・日付・曜日・開始時間・終了時間</strong> です。
+        スプレッドシートに登録してあれば <strong>受給者証番号・契約支給量・事業所番号・事業者名</strong> も入ります
+        （メニュー「ウィング報告 → 実績記録票の事業所情報を設定する」で登録できます）。<br>
+        サービス提供の状況・各加算・利用者確認欄・備考は、システムに無い値なので空欄のままです。
+      </p>
+
+      <div id="jissekiMsg" class="msg msg-error hidden"></div>
+
+      <div id="jissekiSheet" class="jisseki" role="region" aria-live="off"
+           aria-labelledby="tab-jisseki"></div>
     </div>
   </section>
 
@@ -1264,6 +1380,12 @@ function onMainTab(id) {
   if (id === 'tab-nippo') {
     if (!loaded.month || stale.month) loadMonth();
     else { renderNippo(true); setTimeout(sayNippo, 320); }
+  }
+
+  /* 実績記録票も同じ月次データから作る（通信しない）。 */
+  if (id === 'tab-jisseki') {
+    if (!loaded.month || stale.month) loadMonth();
+    else renderJisseki();
   }
 }
 
@@ -1651,7 +1773,7 @@ function minToHHMM(min) {
 /* 月のプルダウン2つ（月次と利用者ごと）と、利用者のプルダウンを埋める。
  * 選んでいたものは、あれば選び直す。 */
 function fillSelectors(r) {
-  [['ym', r.ym], ['ym2', r.ym], ['ymN', r.ym]].forEach(pair => {
+  [['ym', r.ym], ['ym2', r.ym], ['ymN', r.ym], ['ymJ', r.ym]].forEach(pair => {
     const sel = document.getElementById(pair[0]);
     sel.innerHTML = '';
     (r.months || []).forEach(m => {
@@ -1663,8 +1785,8 @@ function fillSelectors(r) {
     sel.value = pair[1];
   });
 
-  // 利用者のプルダウンは「利用者ごとに見る」と「日報」の2か所にある
-  ['userSel', 'userSelN'].forEach(id => {
+  // 利用者のプルダウンは「利用者ごとに見る」「日報」「実績記録票」の3か所にある
+  ['userSel', 'userSelN', 'userSelJ'].forEach(id => {
     const us = document.getElementById(id);
     const keep = us.value;
     us.innerHTML = '';
@@ -1683,8 +1805,9 @@ function fillSelectors(r) {
  * 「いまどこを見ているか」で、押したボタン・月のプルダウン・
  * エラーを出す場所を選ぶ。 */
 function monthContext() {
-  if (activeMain === 'tab-nippo')  return { btn: 'btnNippoReload', ym: 'ymN', msg: nippoMsg };
-  if (activeSub  === 'sub-user')   return { btn: 'btnUserReload',  ym: 'ym2', msg: userMsg  };
+  if (activeMain === 'tab-nippo')   return { btn: 'btnNippoReload',   ym: 'ymN', msg: nippoMsg };
+  if (activeMain === 'tab-jisseki') return { btn: 'btnJissekiReload', ym: 'ymJ', msg: jissekiMsg };
+  if (activeSub  === 'sub-user')    return { btn: 'btnUserReload',    ym: 'ym2', msg: userMsg  };
   return { btn: 'btnMonthReload', ym: 'ym', msg: monthMsg };
 }
 
@@ -1695,6 +1818,7 @@ async function loadMonth() {
   clearError(monthMsg);
   clearError(userMsg);
   clearError(nippoMsg);
+  clearError(jissekiMsg);
   document.getElementById('monthTbody').innerHTML = '';
   document.getElementById('userTbody').innerHTML = '';
   document.getElementById('nippoSheet').innerHTML = '';
@@ -1721,6 +1845,7 @@ async function loadMonth() {
       renderMonth(!onMonth);
       renderUser(!onUser);
       renderNippo(activeMain !== 'tab-nippo');
+      renderJisseki();
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else {
@@ -1910,7 +2035,7 @@ document.getElementById('btnUserReload').addEventListener('click', loadMonth);
 /* 月のプルダウンは3か所にある。どれを変えても3つともそろえる。 */
 function syncYm(from) {
   const v = document.getElementById(from).value;
-  ['ym', 'ym2', 'ymN'].forEach(id => { document.getElementById(id).value = v; });
+  ['ym', 'ym2', 'ymN', 'ymJ'].forEach(id => { document.getElementById(id).value = v; });
   loadMonth();
 }
 document.getElementById('ym').addEventListener('change',  () => syncYm('ym'));
@@ -2780,10 +2905,300 @@ document.getElementById('btnNippoPrint').addEventListener('click', () => {
     showError(nippoMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
     return;
   }
-  window.print();
+  printWith('print-nippo');
 });
 document.getElementById('btnNippoXlsx').addEventListener('click', () => downloadNippoXlsx(false));
 document.getElementById('btnNippoXlsxAll').addEventListener('click', () => downloadNippoXlsx(true));
+
+/* =========================================================================
+ * 実績記録票（様式17 就労継続支援提供実績記録票）
+ * -------------------------------------------------------------------------
+ * 厚労省のひな形（0329006.xls の「就労継続支援」シート）を画面に起こしたもの。
+ * ★ひな形は「列幅1のマス目を結合して作る」方眼レイアウトなので、
+ *   結合ぶんの列数をそのまま幅の比にしてある（下の w がその列数）。
+ *   合計65列 ＝ ひな形の印刷範囲 C〜BO と同じ。
+ *
+ * ★行は土日を外した月〜金（2026-08-23にユーザーが指示。土日は絶対閉所日）。
+ *   ひな形の表は25行しかないので、月〜金だけなら必ず1枚に収まる。
+ *
+ * ★自動で入るのは 年月・氏名・日付・曜日・開始時間・終了時間 だけ。
+ *   受給者証番号・事業所番号・契約支給量・各加算・利用者確認欄は
+ *   いまシステムに無い値なので空欄にしてある（職員が手で書く）。
+ * ======================================================================= */
+const jissekiMsg = document.getElementById('jissekiMsg');
+
+var JISSEKI_COLS = [
+  { head: '日付',   w: 3 },
+  { head: '曜日',   w: 3 },
+  { head: 'サービス提供の状況', w: 5 },
+  { head: '開始時間', w: 5 },
+  { head: '終了時間', w: 5 },
+  { head: '往',     w: 2 },
+  { head: '復',     w: 2 },
+  { head: '時間数', w: 5 },
+  { head: '食事提供\n加算',     w: 3 },
+  { head: '医療連携\n体制加算', w: 3 },
+  { head: '体験利用\n支援加算', w: 3 },
+  { head: '地域協働\n加算',     w: 3 },
+  { head: '緊急時受入加算',     w: 3 },
+  { head: '集中的支援加算',     w: 3 },
+  { head: '施設外\n支援',       w: 3 },
+  { head: '利用者\n確認欄',     w: 5 },
+  { head: '備考',   w: 9 }
+];
+
+const JISSEKI_WSUM = JISSEKI_COLS.reduce((a, c) => a + c.w, 0);
+
+/* 和暦。実績記録票は「令和○年○月分」なので、そこだけ使う。 */
+function wareki(year) {
+  return (year >= 2019) ? '令和' + (year - 2018) : String(year);
+}
+
+/* セルを1つ作る。\n を入れると改行になる（見出しが2段の欄があるため）。 */
+function jcell(tag, text, opt) {
+  const el = document.createElement(tag);
+  if (opt && opt.cs)  el.colSpan = opt.cs;
+  if (opt && opt.rs)  el.rowSpan = opt.rs;
+  if (opt && opt.cls) el.className = opt.cls;
+  if (tag === 'th') el.scope = 'col';
+  String(text == null ? '' : text).split('\n').forEach((line, i) => {
+    if (i) el.appendChild(document.createElement('br'));
+    el.appendChild(document.createTextNode(line));
+  });
+  return el;
+}
+
+/* その月の月〜金だけを並べる。土日は出さない（閉所日のため）。 */
+function jissekiRows(r, u) {
+  const byDay = (u && u.byDay) || {};
+  const out = [];
+  (r.days || []).forEach(day => {
+    if (day.w === '土' || day.w === '日') return;
+    const slot = byDay[String(day.d)] || {};
+    out.push({
+      d: day.d,
+      w: day.w,
+      holiday: day.holiday || '',
+      start: slot.start ? slot.start.time : '',
+      end:   slot.end   ? slot.end.time   : ''
+    });
+  });
+  return out;
+}
+
+function renderJisseki() {
+  const box = document.getElementById('jissekiSheet');
+  box.innerHTML = '';
+  const r = monthData;
+  if (!r) return;
+
+  const name = document.getElementById('userSelJ').value;
+  const u = (r.users || []).filter(x => x.name === name)[0];
+  if (!u) return;
+
+  const mm = String(r.ym || '').match(/^(\d{4})-(\d{1,2})$/);
+  const year  = mm ? Number(mm[1]) : new Date().getFullYear();
+  const month = mm ? Number(mm[2]) : new Date().getMonth() + 1;
+
+  const sheet = document.createElement('div');
+  sheet.className = 'jisseki-sheet';
+
+  // --- いちばん上（令和○年○月分 と 表題） ---
+  const top = document.createElement('div');
+  top.className = 'jisseki-top';
+  const ym = document.createElement('div');
+  ym.className = 'jisseki-ym';
+  ym.textContent = wareki(year) + '　' + month + '　月分';
+  const ti = document.createElement('div');
+  ti.className = 'jisseki-title';
+  ti.textContent = '就労継続支援提供実績記録票';
+  top.appendChild(ym);
+  top.appendChild(ti);
+  sheet.appendChild(top);
+
+  // --- 受給者証番号・氏名・事業所など ---
+  const info = document.createElement('table');
+  info.className = 'jisseki-info';
+  const icg = document.createElement('colgroup');
+  [14, 20, 16, 16, 18, 16].forEach(w => {
+    const c = document.createElement('col');
+    c.style.width = w + '%';
+    icg.appendChild(c);
+  });
+  info.appendChild(icg);
+  const ib = document.createElement('tbody');
+
+  /* ★受給者証番号・契約支給量はウィング利用者シートの F列・G列、
+     事業所番号・事業者名・事業所名は事業所情報シートから来る（2026-08-23）。
+     入っていなければ空欄のまま出す（職員が手で書く）。 */
+  const office = r.office || {};
+  const officeName = [office.owner, office.name].filter(x => x).join('　');
+
+  const ir1 = document.createElement('tr');
+  ir1.appendChild(jcell('td', '受給者証\n番　　号', { cls: 'lbl' }));
+  ir1.appendChild(jcell('td', u.jukyu || '', { cls: 'val' }));
+  ir1.appendChild(jcell('td', '支給決定障害者氏名', { cls: 'lbl' }));
+  ir1.appendChild(jcell('td', u.name, { cls: 'val' }));
+  ir1.appendChild(jcell('td', '事業所番号', { cls: 'lbl' }));
+  ir1.appendChild(jcell('td', office.no || '', { cls: 'val' }));
+  ib.appendChild(ir1);
+
+  const ir2 = document.createElement('tr');
+  ir2.appendChild(jcell('td', '契約支給量', { cls: 'lbl' }));
+  ir2.appendChild(jcell('td', u.keiyaku || '', { cls: 'val' }));
+  ir2.appendChild(jcell('td', '', { cls: 'none' }));
+  ir2.appendChild(jcell('td', '', { cls: 'none' }));
+  ir2.appendChild(jcell('td', '事業者及び\nその事業所', { cls: 'lbl' }));
+  ir2.appendChild(jcell('td', officeName, { cls: 'val' }));
+  ib.appendChild(ir2);
+
+  info.appendChild(ib);
+  sheet.appendChild(info);
+
+  // --- 本体の表 ---
+  const table = document.createElement('table');
+  table.className = 'jisseki-table';
+  const cg = document.createElement('colgroup');
+  JISSEKI_COLS.forEach(c => {
+    const col = document.createElement('col');
+    col.style.width = (c.w / JISSEKI_WSUM * 100).toFixed(2) + '%';
+    cg.appendChild(col);
+  });
+  table.appendChild(cg);
+
+  /* 見出しは3段。ひな形の8〜10行目と同じ組み方にしてある。 */
+  const thead = document.createElement('thead');
+  const h1 = document.createElement('tr');
+  h1.appendChild(jcell('th', '日付', { rs: 3 }));
+  h1.appendChild(jcell('th', '曜日', { rs: 3 }));
+  h1.appendChild(jcell('th', 'サービス提供実績', { cs: 13 }));
+  h1.appendChild(jcell('th', '利用者\n確認欄', { rs: 3 }));
+  h1.appendChild(jcell('th', '備考', { rs: 3 }));
+  thead.appendChild(h1);
+
+  const h2 = document.createElement('tr');
+  h2.appendChild(jcell('th', 'サービス提供\nの状況', { rs: 2 }));
+  h2.appendChild(jcell('th', '開始時間', { rs: 2 }));
+  h2.appendChild(jcell('th', '終了時間', { rs: 2 }));
+  h2.appendChild(jcell('th', '送迎加算', { cs: 2 }));
+  h2.appendChild(jcell('th', '訪問支援特別加算'));
+  ['食事提供\n加算', '医療連携\n体制加算', '体験利用\n支援加算', '地域協働\n加算',
+   '緊急時受入加算', '集中的支援加算', '施設外\n支援'].forEach(t => {
+    h2.appendChild(jcell('th', t, { rs: 2 }));
+  });
+  thead.appendChild(h2);
+
+  const h3 = document.createElement('tr');
+  h3.appendChild(jcell('th', '往'));
+  h3.appendChild(jcell('th', '復'));
+  h3.appendChild(jcell('th', '時間数'));
+  thead.appendChild(h3);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  jissekiRows(r, u).forEach(row => {
+    const tr = document.createElement('tr');
+    if (row.holiday && !row.start && !row.end) tr.className = 'j-rest';
+    tr.appendChild(jcell('td', row.d));
+    tr.appendChild(jcell('td', row.w));
+    tr.appendChild(jcell('td', ''));                            // サービス提供の状況
+    tr.appendChild(jcell('td', row.start, { cls: 'j-time' }));
+    tr.appendChild(jcell('td', row.end,   { cls: 'j-time' }));
+    for (let i = 0; i < 10; i++) tr.appendChild(jcell('td', ''));  // 各加算・施設外支援
+    tr.appendChild(jcell('td', ''));                            // 利用者確認欄
+    tr.appendChild(jcell('td', ''));                            // 備考
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  sheet.appendChild(table);
+
+  // --- 合計の行（ひな形の36〜37行目） ---
+  const foot = document.createElement('table');
+  foot.className = 'jisseki-foot';
+  foot.appendChild(cg.cloneNode(true));
+  const fb = document.createElement('tbody');
+
+  const f1 = document.createElement('tr');
+  f1.appendChild(jcell('td', '合計', { cs: 5, rs: 2 }));
+  f1.appendChild(jcell('td', '回', { cs: 2, rs: 2 }));
+  for (let i = 0; i < 7; i++) f1.appendChild(jcell('td', '回', { rs: 2 }));
+  f1.appendChild(jcell('td', '施設外\n支援', { rs: 2 }));
+  f1.appendChild(jcell('td', '当月'));
+  f1.appendChild(jcell('td', '日'));
+  fb.appendChild(f1);
+
+  const f2 = document.createElement('tr');
+  f2.appendChild(jcell('td', '累計'));
+  f2.appendChild(jcell('td', '日／１８０日'));
+  fb.appendChild(f2);
+
+  foot.appendChild(fb);
+  sheet.appendChild(foot);
+
+  // --- 初期加算・集中的支援加算（ひな形の39〜40行目） ---
+  const add = document.createElement('table');
+  add.className = 'jisseki-add';
+  const acg = document.createElement('colgroup');
+  [14, 14, 14, 14, 14, 16, 14].forEach(w => {
+    const c = document.createElement('col');
+    c.style.width = w + '%';
+    acg.appendChild(c);
+  });
+  add.appendChild(acg);
+  const ab = document.createElement('tbody');
+
+  const a1 = document.createElement('tr');
+  a1.appendChild(jcell('td', '初期加算', { cls: 'lbl' }));
+  a1.appendChild(jcell('td', '利用開始日', { cls: 'lbl' }));
+  a1.appendChild(jcell('td', ''));
+  a1.appendChild(jcell('td', '30日目', { cls: 'lbl' }));
+  a1.appendChild(jcell('td', ''));
+  a1.appendChild(jcell('td', '当月算定日数', { cls: 'lbl' }));
+  a1.appendChild(jcell('td', ''));
+  ab.appendChild(a1);
+
+  const a2 = document.createElement('tr');
+  a2.appendChild(jcell('td', '集中的支援加算', { cls: 'lbl' }));
+  a2.appendChild(jcell('td', '支援開始日', { cls: 'lbl' }));
+  a2.appendChild(jcell('td', ''));
+  a2.appendChild(jcell('td', '', { cls: 'lbl' }));
+  a2.appendChild(jcell('td', ''));
+  a2.appendChild(jcell('td', '', { cls: 'lbl' }));
+  a2.appendChild(jcell('td', ''));
+  ab.appendChild(a2);
+
+  add.appendChild(ab);
+  sheet.appendChild(add);
+
+  const pg = document.createElement('div');
+  pg.className = 'jisseki-page';
+  pg.textContent = '１枚中１枚';
+  sheet.appendChild(pg);
+
+  box.appendChild(sheet);
+}
+
+document.getElementById('userSelJ').addEventListener('change', () => renderJisseki());
+document.getElementById('ymJ').addEventListener('change', () => syncYm('ymJ'));
+document.getElementById('btnJissekiReload').addEventListener('click', () => loadMonth());
+
+/* ★印刷の直前に body へ印をつける。日報と実績記録票のどちらを紙に出すかは
+     この印で決まる（印刷用のCSSがこれを見ている）。 */
+function printWith(cls) {
+  document.body.classList.add(cls);
+  const off = () => document.body.classList.remove(cls);
+  window.addEventListener('afterprint', off, { once: true });
+  setTimeout(off, 60000);   // afterprint が来ないブラウザに備えて
+  window.print();
+}
+
+document.getElementById('btnJissekiPdf').addEventListener('click', () => {
+  if (!monthData) {
+    showError(jissekiMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
+    return;
+  }
+  printWith('print-jisseki');
+});
 
 
 /* =====================================================================

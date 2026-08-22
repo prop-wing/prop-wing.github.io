@@ -1071,8 +1071,9 @@ function renderSagyoSuggest(list) {
  *   実際に保存される文章をそのまま見せている。
  * --------------------------------------------------------------------- */
 let currentRoutines = [];      // 本人の全曜日ぶん
-/* 前に出した報告の時刻。{ start, end, kyukei }。
-   「前回と同じにする」ボタンに使う。サーバーが応答に相乗りさせてくる。 */
+/* 前に出した報告の時刻。曜日(0〜6) → 新しい順に最大2件の
+   { ymd, start, end, kyukei }。サーバーが応答に相乗りさせてくる。
+   ★「前回」＝前の週の同じ曜日（曜日で利用時間が違うため。2026-08-23 ユーザー）。 */
 let currentLast = {};
 
 function todayRoutines() {
@@ -1218,22 +1219,40 @@ document.querySelectorAll('.choice input').forEach(r => {
  * ★押したときだけ入る。自動では入れない（違う日もあるため。2026-08-23にユーザーが指示）。
  * ★前回の値がプルダウンの選択肢に無いときはボタンごと出さない
  *   （古い報告や、選択肢を変えたあとに備える）。 */
+/* いま選んでいる日と同じ曜日の、いちばん近い報告を探す。
+ * ★いま入力している日そのものは飛ばす(訂正のとき自分の値が出ないように)。 */
+function lastEntryFor(kubun) {
+  const list = (currentLast || {})[String(targetDate().getDay())] || [];
+  for (const e of list) {
+    if (e.ymd === currentTarget) continue;
+    if (kubun === '始業' ? e.start : e.end) return e;
+  }
+  return null;
+}
+
 function renderLastButton() {
   const wrap = document.getElementById('lastWrap');
   const btn  = document.getElementById('btnLast');
   const timeSel = document.getElementById('time');
   const kySel   = document.getElementById('kyukei');
-  const L = currentLast || {};
   const inList = (sel, v) => Array.from(sel.options).some(o => o.value === v);
+
+  const e = lastEntryFor(currentKubun);
+  if (!e) { wrap.classList.add('hidden'); return; }
+
+  const week = ['日', '月', '火', '水', '木', '金', '土'][targetDate().getDay()];
+  const md = String(e.ymd).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const d = md ? new Date(Number(md[1]), Number(md[2]) - 1, Number(md[3])) : new Date();
+  const when = '前の' + week + '曜（' + (d.getMonth() + 1) + '月' + d.getDate() + '日）';
 
   let time = '', kyukei = '', label = '';
   if (currentKubun === '始業') {
-    time  = L.start || '';
-    label = '前回と同じ ' + time + ' にする';
+    time  = e.start;
+    label = when + 'と同じ ' + time + ' にする';
   } else {
-    time   = L.end    || '';
-    kyukei = L.kyukei || '';
-    label  = '前回と同じ ' + time + (kyukei ? '・昼等休憩 ' + kyukei : '') + ' にする';
+    time   = e.end;
+    kyukei = e.kyukei || '';
+    label  = when + 'と同じ ' + time + (kyukei ? '・昼等休憩 ' + kyukei : '') + ' にする';
   }
 
   const ok = time && inList(timeSel, time) && (!kyukei || inList(kySel, kyukei));
@@ -1245,14 +1264,15 @@ function renderLastButton() {
 }
 
 document.getElementById('btnLast').addEventListener('click', () => {
-  const L = currentLast || {};
+  const e = lastEntryFor(currentKubun);
+  if (!e) return;
   if (currentKubun === '始業') {
-    document.getElementById('time').value = L.start;
-    announce('時刻を ' + L.start + ' にしました。');
+    document.getElementById('time').value = e.start;
+    announce('時刻を ' + e.start + ' にしました。');
   } else {
-    document.getElementById('time').value = L.end;
-    if (L.kyukei) document.getElementById('kyukei').value = L.kyukei;
-    announce('時刻を ' + L.end + '、昼等休憩を ' + (L.kyukei || '未選択') + ' にしました。');
+    document.getElementById('time').value = e.end;
+    if (e.kyukei) document.getElementById('kyukei').value = e.kyukei;
+    announce('時刻を ' + e.end + '、昼等休憩を ' + (e.kyukei || '未選択') + ' にしました。');
   }
 });
 
