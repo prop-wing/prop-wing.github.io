@@ -284,6 +284,7 @@
   table.grid td.wrap { white-space: pre-wrap; word-break: break-word; min-width: 12em; }
   /* 利用者ごとに見る：職員の返信を1件ずつ積む */
   table.grid td .rpl { white-space: pre-wrap; word-break: break-word; }
+  table.grid td.rest { text-align: center; letter-spacing: .1em; }
   table.grid td .rpl + .rpl { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
   table.grid td .rpl .by { display: block; font-size: 12px; color: var(--muted); }
   table.grid td.day  { white-space: nowrap; }
@@ -1016,8 +1017,7 @@
                 <th scope="col">始業スタッフ返信</th>
                 <th scope="col">終業報告</th>
                 <th scope="col">終業スタッフ返信</th>
-                <th scope="col">返信</th>
-                <th scope="col"><span class="sr-only">代理で入力</span></th>
+                <!-- 返信（済／未）と代理入力の列は 2026-09-21 にユーザーの指示で外した -->
               </tr>
             </thead>
             <tbody id="userTbody"></tbody>
@@ -2131,37 +2131,28 @@ function renderUser(quiet) {
 
     tr.appendChild(td(day.d + '日', 'day'));
     tr.appendChild(td(day.w));
+
+    /* ★報告がない休業日・通所日以外の日は、残りのセルを1つに結合して理由だけ出す
+       （2026-09-21 ユーザー:「休業日は1行にできない？」）。 */
+    const restWhy = (!hasS && !hasE) ? (day.holiday || offWhy || '') : '';
+    if (restWhy) {
+      const c = td(restWhy, 'rest');
+      c.colSpan = 7;
+      tr.appendChild(c);
+      tb.appendChild(tr);
+      return;
+    }
+
     tr.appendChild(td(hasS ? slot.start.taicho : ''));
     tr.appendChild(td(hasS ? slot.start.time : ''));
     tr.appendChild(td(hasE ? slot.end.time : ''));
 
     /* ★2026-09-21 組み替え。利用者の自由記述（始業報告・終業報告）と、
-       それへの職員の返信を並べる。報告がない休業日は、始業報告の欄に理由を出す。 */
-    tr.appendChild(td(hasS ? slot.start.memo
-                           : (!hasE ? (day.holiday || offWhy || '') : ''), 'wrap'));
+       それへの職員の返信を並べる。 */
+    tr.appendChild(td(hasS ? slot.start.memo : '', 'wrap'));
     tr.appendChild(replyCell(hasS ? slot.start.replies : null));
     tr.appendChild(td(hasE ? slot.end.memo : '', 'wrap'));
     tr.appendChild(replyCell(hasE ? slot.end.replies : null));
-
-    // 返信
-    const rc = document.createElement('td');
-    const marks = [];
-    if (hasS) marks.push(['始業' + (slot.start.replies && slot.start.replies.length ? ' 済' : ' 未'),
-                          slot.start.replies && slot.start.replies.length ? 'done' : 'yet']);
-    if (hasE) marks.push(['終業' + (slot.end.replies && slot.end.replies.length ? ' 済' : ' 未'),
-                          slot.end.replies && slot.end.replies.length ? 'done' : 'yet']);
-    tagsInto(rc, marks);
-    tr.appendChild(rc);
-
-    // 報告が抜けている日は、その日のぶんを代理で入れられるようにする
-    const ac = document.createElement('td');
-    if (countable && !(hasS && hasE)) {
-      ac.appendChild(proxyButton(u.name,
-        r.ym + '-' + ('0' + day.d).slice(-2),
-        hasS ? '終業' : '始業',
-        day.d + '日'));
-    }
-    tr.appendChild(ac);
 
     tb.appendChild(tr);
   });
@@ -3058,7 +3049,11 @@ document.getElementById('btnNippoXlsxAll').addEventListener('click', () => downl
  * ★印刷は A4横。@page の向きは printWith が差し込む。
  * ========================================================================= */
 const shienMsg = document.getElementById('shienMsg');
-var SHIEN_COLS = NIPPO_COLS.concat([{ head: '支援内容', w: 48 }]);
+/* ★見出しは短くする（2026-09-21 ユーザー: 開始時間・終了時間・昼等休憩がはみ出る）。
+     日報の NIPPO_COLS は現物のExcelに合わせてあるので触らない。 */
+var SHIEN_HEAD = { '開始時間': '開始', '終了時間': '終了', '昼等休憩': '休憩' };
+var SHIEN_COLS = NIPPO_COLS.map(c => ({ head: SHIEN_HEAD[c.head] || c.head, w: c.w }))
+  .concat([{ head: '支援内容', w: 48 }]);
 let shienUser = '';     // いま表示している利用者（切り替えを取り消したときに戻す）
 
 function shienDirty() {
