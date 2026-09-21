@@ -574,8 +574,9 @@
              aria-label="いつもの予定" aria-describedby="hint-routine"></div>
       </div>
 
-      <label for="biko">備考</label>
-      <p class="hint" id="hint-biko">作業に関して気づいたことや、他のサービスを使った時間など。<br>
+      <!-- ★備考は任意（2026-09-21 ユーザー）。いつもの予定だけでも、何も無くても送れる。 -->
+      <label for="biko">備考（任意）</label>
+      <p class="hint" id="hint-biko">作業に関して気づいたことや、他のサービスを使った時間など。書かなくても送れます。<br>
         例：13:00〜13:30 担当者会議</p>
       <textarea id="biko" style="min-height:80px" enterkeyhint="done"
                 aria-describedby="hint-biko"></textarea>
@@ -592,8 +593,12 @@
       <button type="button" id="btnRoutineEdit" class="linkbtn">いつもの予定を登録・変更する</button>
     </div>
 
-    <label for="memo">自由記述（任意）</label>
-    <p class="hint" id="hint-memo">挨拶や、業務と関係のない話などをどうぞ。書かなくても送れます</p>
+    <!-- ★自由記述は必須（2026-09-21 ユーザー）。
+         よく使う文をボタンで入れられる。文面は「利用者定型文」シートで職員が管理し、
+         始業と終業で出るものが変わる。押すと足されるだけなので、そのあと書き足せる。 -->
+    <label for="memo">自由記述</label>
+    <p class="hint" id="hint-memo">挨拶や、業務と関係のない話などをどうぞ。下のボタンを押すと文が入り、そのあと書き足せます</p>
+    <div class="suggest hidden" id="memoSuggest" role="group" aria-label="よく使う文"></div>
     <textarea id="memo" style="min-height:90px" enterkeyhint="done"
               aria-describedby="hint-memo"></textarea>
 
@@ -872,6 +877,7 @@ async function doLogin() {
     if (r.ok) {
       localStorage.setItem(TOKEN_KEY, r.token);
       document.getElementById('pin').value = '';
+      takeMemoTpl(r);
       enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent, r.last);
     } else if (r.error === 'locked') {
       showError(loginMsg, '暗証番号を続けて間違えたため、しばらくログインできません。15分ほど待ってからもう一度お試しください。');
@@ -1056,6 +1062,45 @@ function renderSagyoSuggest(list) {
       const ta = document.getElementById('sagyo');
       ta.value = text;
       ta.focus();   // 入力欄に移るので、読み上げが入った内容をそのまま読む
+    });
+    box.appendChild(b);
+  });
+}
+
+/* --- 自由記述の定型文（2026-09-21） -----------------------------------
+ * 文面は「利用者定型文」シートで職員が管理し、サーバーが memoTpl として
+ * ログイン・報告の応答に相乗りさせてくる。{ '始業': [...], '終業': [...] }
+ * ★サーバーがまだ古い（memoTpl を返さない）ときに備えて、同じ文面を手元にも持つ。
+ *   シートが空なら [] が返るので、そのときはボタンを出さない（手元の文面も使わない）。
+ * --------------------------------------------------------------------- */
+const MEMO_TPL_FALLBACK = {
+  '始業': ['おはようございます。', '本日もよろしくお願いします。', '少し体調がすぐれません。'],
+  '終業': ['本日もありがとうございました。', 'お疲れさまでした。', '明日もよろしくお願いします。']
+};
+let currentMemoTpl = MEMO_TPL_FALLBACK;
+
+function takeMemoTpl(r) {
+  if (r && r.memoTpl) currentMemoTpl = r.memoTpl;
+}
+
+function renderMemoSuggest() {
+  const box  = document.getElementById('memoSuggest');
+  const list = (currentMemoTpl && currentMemoTpl[currentKubun]) || [];
+  box.innerHTML = '';
+  box.classList.toggle('hidden', list.length === 0);
+
+  list.forEach(text => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.setAttribute('aria-label', '自由記述に「' + text + '」を足す');
+    b.addEventListener('click', () => {
+      // ★上書きせず足す。いくつか組み合わせてから書き足せるように。
+      const ta = document.getElementById('memo');
+      const cur = ta.value.replace(/\s+$/, '');
+      ta.value = cur ? cur + '\n' + text : text;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);   // 続けて書けるよう末尾へ
     });
     box.appendChild(b);
   });
@@ -1286,6 +1331,7 @@ function setKubun(k) {
   document.getElementById('sec-end').classList.toggle('hidden', k !== '終業');
 
   renderLastButton();   // 前回と同じ時刻のボタンも、区分に合わせて作り直す
+  renderMemoSuggest();  // 自由記述の定型文も、始業と終業で入れ替える
 
   // すでに報告済みの区分を選んだら知らせる。
   // 訂正したい場合もあるので、止めはせず案内だけにする。
@@ -1341,6 +1387,7 @@ function finishSent(r, f) {
   if (r.sagyoList) renderSagyoSuggest(r.sagyoList);
   if (r.routines)  currentRoutines = r.routines;
   if (r.last)      currentLast = r.last;
+  takeMemoTpl(r);
   renderSummary([
     ['名前', r.name || currentName],
     ['日付', targetEntry().label],
@@ -1416,6 +1463,12 @@ document.getElementById('btnSend').addEventListener('click', async () => {
   if (currentKubun === '終業' && !sagyo) {
     showError(reportMsg, '訓練・作業内容を入力してください。');
     document.getElementById('sagyo').focus();
+    return;
+  }
+  // ★自由記述は必須（2026-09-21 ユーザー）。備考は任意のまま。
+  if (!memo) {
+    showError(reportMsg, '自由記述を入力してください。ボタンを押すと、よく使う文が入ります。');
+    document.getElementById('memo').focus();
     return;
   }
 
@@ -1724,7 +1777,7 @@ buildKyukeiOptions();
   show('loading');   // 確認が終わるまで数秒あるので、空白の画面を見せない
   try {
     const r = await callApiRetry({ action: 'me', token }, 2, 'name');
-    if (r.ok) { enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent, r.last); return; }
+    if (r.ok) { takeMemoTpl(r); enterReport(r.name, r.today, r.sagyoList, r.routines, r.recent, r.last); return; }
     // 期限切れなど、サーバーが明確に「無効」と答えた場合だけ捨てる
     localStorage.removeItem(TOKEN_KEY);
     show('login');

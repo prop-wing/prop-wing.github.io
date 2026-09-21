@@ -156,6 +156,7 @@
     margin-bottom: 10px;
   }
   .topbar .who { font-weight: 700; margin-right: auto; }
+  .topbar .auto { font-size: 13px; color: var(--muted); white-space: nowrap; }
   .topbar .linkbtn { display: inline; width: auto; margin: 0; padding: 4px 8px; }
 
   /* ===== タブ ===== */
@@ -281,6 +282,10 @@
   /* 報告が抜けている日。休業日(.none)より強く出す。 */
   table.grid tr.miss th, table.grid tr.miss td { background: var(--warn-bg); }
   table.grid td.wrap { white-space: pre-wrap; word-break: break-word; min-width: 12em; }
+  /* 利用者ごとに見る：職員の返信を1件ずつ積む */
+  table.grid td .rpl { white-space: pre-wrap; word-break: break-word; }
+  table.grid td .rpl + .rpl { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  table.grid td .rpl .by { display: block; font-size: 12px; color: var(--muted); }
   table.grid td.day  { white-space: nowrap; }
 
   .usum {
@@ -605,6 +610,28 @@
   .nippo-notes p.red { color: #e00000; }
 
   /* =====================================================================
+   * 支援記録（日報＋支援内容の欄）。見た目は日報の CSS をそのまま使う。
+   * =================================================================== */
+  .shien .nippo-head, .shien table.nippo-table { min-width: 1000px; }
+  .shien td.c-shien { vertical-align: top; padding: 3px; }
+  .shien td.c-shien textarea {
+    display: block; width: 100%; min-height: 48px;
+    font: inherit; font-size: 12px; line-height: 1.45;
+    padding: 4px 6px; border: 1px solid #b8c0cc; border-radius: 4px;
+    resize: vertical; background: #fff;
+  }
+  .shien td.c-shien textarea.dirty { border-color: #d98c00; background: #fffaf0; }
+  .shien .shien-meta {
+    display: flex; align-items: center; gap: 6px; margin-top: 3px;
+    font-size: 11px; color: var(--muted);
+  }
+  .shien .shien-meta .st { margin-right: auto; }
+  .shien .shien-meta .st.dirty { color: #b86e00; font-weight: 700; }
+  .shien .shien-meta .st.err   { color: #c62828; font-weight: 700; }
+  .shien .shien-meta button { padding: 2px 10px; font-size: 12px; }
+  .shien .shien-print { display: none; }
+
+  /* =====================================================================
    * 実績記録票（様式17 就労継続支援提供実績記録票）
    * ---------------------------------------------------------------------
    * 厚労省のひな形は「列幅1のマス目を結合して作る」方眼レイアウトなので、
@@ -690,6 +717,41 @@
     body.print-jisseki table.jisseki-table th { font-size: 7pt; }
     body.print-jisseki table.jisseki-table tbody td { height: 6.6mm; }
     body.print-jisseki .jisseki-title { font-size: 13pt; }
+
+    /* 支援記録（A4横。@page の向きは printWith が差し込む） */
+    body.print-shien #shienSheet,
+    body.print-shien #shienSheet * { visibility: visible; }
+    body.print-shien #shienSheet {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      overflow: visible;
+    }
+    #shienSheet .nippo-head,
+    #shienSheet table.nippo-table { min-width: 0; }
+    #shienSheet .nippo-head  { margin-bottom: 4px; }
+    #shienSheet .nippo-title { font-size: 13pt; }
+    #shienSheet .nippo-name  { font-size: 10pt; }
+    #shienSheet table.nippo-table { font-size: 7pt; line-height: 1.3; }
+    #shienSheet table.nippo-table th,
+    #shienSheet table.nippo-table td { padding: 1px 3px; }
+    #shienSheet table.nippo-table td.c-text,
+    #shienSheet table.nippo-table td.c-shien { font-size: 6.3pt; line-height: 1.15; padding: 0 3px; }
+    #shienSheet table.nippo-table tbody td { height: 5.2mm; }
+    #shienSheet table.nippo-table tr { break-inside: avoid; }
+    /* 「計」の行を各ページに繰り返さない（最後に1回だけ出す） */
+    #shienSheet table.nippo-table tfoot { display: table-row-group; }
+    #shienSheet textarea,
+    #shienSheet .shien-meta { display: none !important; }
+    #shienSheet .shien-print { display: block; white-space: pre-wrap; }
+    #shienSheet .nippo-use { font-size: 7.5pt; margin-top: 6px; }
+    #shienSheet * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
 
     body.print-nippo #nippoSheet,
     body.print-nippo #nippoSheet * { visibility: visible; }
@@ -786,6 +848,7 @@
 
     <div class="topbar">
       <span class="who" id="who"></span>
+      <span class="auto" id="autoInfo" title="開いている画面を5分ごとに読み直します"></span>
       <button type="button" id="btnLogout" class="linkbtn">ログアウト</button>
     </div>
 
@@ -799,6 +862,8 @@
               aria-controls="panel-attend" aria-selected="false" tabindex="-1">始業・終業管理</button>
       <button type="button" role="tab" id="tab-nippo"
               aria-controls="panel-nippo"  aria-selected="false" tabindex="-1">日報</button>
+      <button type="button" role="tab" id="tab-shien"
+              aria-controls="panel-shien"  aria-selected="false" tabindex="-1">支援記録</button>
       <button type="button" role="tab" id="tab-jisseki"
               aria-controls="panel-jisseki" aria-selected="false" tabindex="-1">実績記録票</button>
     </div>
@@ -936,18 +1001,21 @@
 
         <div class="tablewrap">
           <table class="grid" id="userTable">
-            <caption class="sr-only">選んだ利用者の、その月の日ごとの報告</caption>
+            <caption class="sr-only">選んだ利用者の、その月の日ごとの報告と職員の返信</caption>
             <thead>
               <tr>
+                <!-- ★2026-09-21 組み替え。日報と似通っていたので、
+                     利用者とのやり取り（自由記述と職員の返信）を見る表にした。
+                     昼等休憩・時間数・作業内容・備考は日報タブで見る。 -->
                 <th scope="col">日</th>
                 <th scope="col">曜</th>
                 <th scope="col">体調</th>
                 <th scope="col">開始</th>
                 <th scope="col">終了</th>
-                <th scope="col">昼等休憩</th>
-                <th scope="col">時間数</th>
-                <th scope="col">訓練・作業内容</th>
-                <th scope="col">備考</th>
+                <th scope="col">始業報告</th>
+                <th scope="col">始業スタッフ返信</th>
+                <th scope="col">終業報告</th>
+                <th scope="col">終業スタッフ返信</th>
                 <th scope="col">返信</th>
                 <th scope="col"><span class="sr-only">代理で入力</span></th>
               </tr>
@@ -990,6 +1058,39 @@
       <div id="nippoMsg" class="msg msg-error hidden"></div>
 
       <div id="nippoSheet" class="nippo" role="region" aria-live="off" aria-labelledby="tab-nippo"></div>
+    </div>
+
+    <!-- ---------- 支援記録 ----------
+         ★2026-09-21 追加。中身は日報とほぼ同じで、備考の右に「支援内容」の欄がある。
+           支援員がその日の支援内容を書いて、行ごとに「保存」する。
+           記録はスプレッドシートの「支援記録」シートに入る（1人1日1行）。
+         ★通信は保存のときだけ。表は始業・終業管理と同じ月次データから組み立てる。
+         ★印刷は A4横（支援内容の列があるため）。 -->
+    <div id="panel-shien" role="tabpanel" tabindex="-1" aria-labelledby="tab-shien" class="hidden">
+      <div class="bar">
+        <label class="inline" for="ymS">月
+          <select id="ymS" aria-label="月"></select>
+        </label>
+        <label class="inline" for="userSelS">利用者
+          <select id="userSelS" aria-label="利用者"></select>
+        </label>
+        <span style="margin-right:auto;"></span>
+        <button type="button" id="btnShienReload" class="btn-small">更新</button>
+      </div>
+
+      <div class="bar">
+        <button type="button" id="btnShienPrint" class="btn-small">この支援記録を印刷する</button>
+      </div>
+
+      <p class="hint">
+        「支援内容」の欄に書いて、その行の<strong>「保存」</strong>を押してください。
+        保存した職員の名前と時刻が欄の下に出ます。消して保存すると、その日の記録は無くなります。<br>
+        印刷はA4横です（印刷の画面で「PDFに保存」を選ぶとPDFになります）。保存していない内容は印刷されません。
+      </p>
+
+      <div id="shienMsg" class="msg msg-error hidden"></div>
+
+      <div id="shienSheet" class="nippo shien" role="region" aria-live="off" aria-labelledby="tab-shien"></div>
     </div>
 
     <!-- ---------- 実績記録票（様式17 就労継続支援提供実績記録票） ----------
@@ -1382,6 +1483,12 @@ function onMainTab(id) {
     else { renderNippo(true); setTimeout(sayNippo, 320); }
   }
 
+  /* 支援記録も同じ月次データから作る（通信は保存のときだけ）。 */
+  if (id === 'tab-shien') {
+    if (!loaded.month || stale.month) loadMonth();
+    else renderShien();
+  }
+
   /* 実績記録票も同じ月次データから作る（通信しない）。 */
   if (id === 'tab-jisseki') {
     if (!loaded.month || stale.month) loadMonth();
@@ -1454,12 +1561,15 @@ function setTile(tileId, numId, n, calm) {
   t.classList.toggle('calm',  n === 0 || !!calm);
 }
 
-async function loadHome() {
+async function loadHome(silent) {
+  const quiet = silent === true;     // 5分ごとの自動更新（表を消さずに読み直す）
   const btn = document.getElementById('btnHomeReload');
   if (isBusy(btn)) return;
   clearError(homeMsg);
-  loadingBox(document.getElementById('homeYetBody'));
-  document.getElementById('homeTbody').innerHTML = '';
+  if (!quiet) {
+    loadingBox(document.getElementById('homeYetBody'));
+    document.getElementById('homeTbody').innerHTML = '';
+  }
 
   setBusy(btn, '更新中');
   try {
@@ -1473,16 +1583,19 @@ async function loadHome() {
       homeData = r;
       loaded.home = true;
       stale.home  = false;
-      renderHome();
+      markLoaded();
+      renderHome(quiet);
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
-    } else {
+    } else if (!quiet) {
       document.getElementById('homeYetBody').innerHTML = '';
       showError(homeMsg, '読み込めませんでした。「更新」を押して、もう一度お試しください。');
     }
   } catch (e) {
-    document.getElementById('homeYetBody').innerHTML = '';
-    showError(homeMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    if (!quiet) {
+      document.getElementById('homeYetBody').innerHTML = '';
+      showError(homeMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    }
   } finally {
     setIdle(btn, '更新');
   }
@@ -1657,7 +1770,7 @@ function renderHomeCounts() {
   });
 }
 
-document.getElementById('btnHomeReload').addEventListener('click', loadHome);
+document.getElementById('btnHomeReload').addEventListener('click', () => loadHome());
 
 /* =====================================================================
  * 始業・終業管理 → 日付で見る（返信もここから）
@@ -1665,12 +1778,13 @@ document.getElementById('btnHomeReload').addEventListener('click', loadHome);
 const listMsg = document.getElementById('listMsg');
 let items = [];
 
-async function loadList() {
+async function loadList(silent) {
+  const quiet = silent === true;     // 5分ごとの自動更新（一覧を消さずに読み直す）
   const btn  = document.getElementById('btnReload');
   if (isBusy(btn)) return;
   const body = document.getElementById('listBody');
   clearError(listMsg);
-  loadingBox(body);
+  if (!quiet) loadingBox(body);
 
   setBusy(btn, '更新中');
   try {
@@ -1687,16 +1801,19 @@ async function loadList() {
       if (r.templates) templates = r.templates;   // シートで直した文面がここで反映される
       loaded.list = true;
       stale.list  = false;
-      renderList();
+      markLoaded();
+      renderList(quiet);
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
-    } else {
+    } else if (!quiet) {
       body.innerHTML = '';
       showError(listMsg, '読み込めませんでした。もう一度お試しください。');
     }
   } catch (e) {
-    body.innerHTML = '';
-    showError(listMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    if (!quiet) {
+      body.innerHTML = '';
+      showError(listMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    }
   } finally {
     setIdle(btn, '更新');
   }
@@ -1745,8 +1862,8 @@ function renderList(quiet) {
   }
 }
 
-document.getElementById('btnReload').addEventListener('click', loadList);
-document.getElementById('days').addEventListener('change', loadList);
+document.getElementById('btnReload').addEventListener('click', () => loadList());
+document.getElementById('days').addEventListener('change', () => loadList());
 document.getElementById('onlyYet').addEventListener('change', () => renderList());
 
 /* =====================================================================
@@ -1773,7 +1890,7 @@ function minToHHMM(min) {
 /* 月のプルダウン2つ（月次と利用者ごと）と、利用者のプルダウンを埋める。
  * 選んでいたものは、あれば選び直す。 */
 function fillSelectors(r) {
-  [['ym', r.ym], ['ym2', r.ym], ['ymN', r.ym], ['ymJ', r.ym]].forEach(pair => {
+  [['ym', r.ym], ['ym2', r.ym], ['ymN', r.ym], ['ymS', r.ym], ['ymJ', r.ym]].forEach(pair => {
     const sel = document.getElementById(pair[0]);
     sel.innerHTML = '';
     (r.months || []).forEach(m => {
@@ -1785,8 +1902,8 @@ function fillSelectors(r) {
     sel.value = pair[1];
   });
 
-  // 利用者のプルダウンは「利用者ごとに見る」「日報」「実績記録票」の3か所にある
-  ['userSel', 'userSelN', 'userSelJ'].forEach(id => {
+  // 利用者のプルダウンは「利用者ごとに見る」「日報」「支援記録」「実績記録票」の4か所にある
+  ['userSel', 'userSelN', 'userSelS', 'userSelJ'].forEach(id => {
     const us = document.getElementById(id);
     const keep = us.value;
     us.innerHTML = '';
@@ -1806,22 +1923,38 @@ function fillSelectors(r) {
  * エラーを出す場所を選ぶ。 */
 function monthContext() {
   if (activeMain === 'tab-nippo')   return { btn: 'btnNippoReload',   ym: 'ymN', msg: nippoMsg };
+  if (activeMain === 'tab-shien')   return { btn: 'btnShienReload',   ym: 'ymS', msg: shienMsg };
   if (activeMain === 'tab-jisseki') return { btn: 'btnJissekiReload', ym: 'ymJ', msg: jissekiMsg };
   if (activeSub  === 'sub-user')    return { btn: 'btnUserReload',    ym: 'ym2', msg: userMsg  };
   return { btn: 'btnMonthReload', ym: 'ym', msg: monthMsg };
 }
 
-async function loadMonth() {
+/* silent === true … 5分ごとの自動更新。表を消さずに裏で読み直し、失敗しても何も出さない。
+ * ★ボタンの click から呼ぶと event が渡ってくるので、true と厳密に比べている。 */
+async function loadMonth(silent) {
+  const quiet = silent === true;
   const ctx = monthContext();
   const btn = document.getElementById(ctx.btn);
   if (isBusy(btn)) return;
+  /* ★支援記録に保存していない内容があれば、読み直すと消えてしまう。 */
+  if (shienDirty()) {
+    if (quiet) return;
+    if (!confirm('保存していない支援内容があります。保存せずに読み直しますか？')) {
+      restoreYm();
+      return;
+    }
+  }
   clearError(monthMsg);
   clearError(userMsg);
   clearError(nippoMsg);
+  clearError(shienMsg);
   clearError(jissekiMsg);
-  document.getElementById('monthTbody').innerHTML = '';
-  document.getElementById('userTbody').innerHTML = '';
-  document.getElementById('nippoSheet').innerHTML = '';
+  if (!quiet) {
+    document.getElementById('monthTbody').innerHTML = '';
+    document.getElementById('userTbody').innerHTML = '';
+    document.getElementById('nippoSheet').innerHTML = '';
+    document.getElementById('shienSheet').innerHTML = '';
+  }
 
   setBusy(btn, '読み込み中');
   try {
@@ -1837,22 +1970,24 @@ async function loadMonth() {
       monthData = r;
       loaded.month = true;
       stale.month  = false;
+      markLoaded();
       fillSelectors(r);
       /* 3つとも描き直すが、読み上げるのはいま開いているものだけにする。
          そうしないと、あとから描いたものの文言で上書きされてしまう。 */
       const onMonth = (activeMain === 'tab-attend' && activeSub === 'sub-month');
       const onUser  = (activeMain === 'tab-attend' && activeSub === 'sub-user');
-      renderMonth(!onMonth);
-      renderUser(!onUser);
-      renderNippo(activeMain !== 'tab-nippo');
+      renderMonth(quiet || !onMonth);
+      renderUser(quiet || !onUser);
+      renderNippo(quiet || activeMain !== 'tab-nippo');
+      renderShien();
       renderJisseki();
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
-    } else {
+    } else if (!quiet) {
       showError(ctx.msg, '読み込めませんでした。「更新」を押して、もう一度お試しください。');
     }
   } catch (e) {
-    showError(ctx.msg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+    if (!quiet) showError(ctx.msg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
   } finally {
     setIdle(btn, '更新');
   }
@@ -1931,6 +2066,23 @@ function renderMonth(quiet) {
   if (!quiet) announce(r.label + 'の月次です。利用者' + users.length + '名を表示しました。');
 }
 
+/* 職員の返信を1件ずつ「本文 ＋ 誰が・いつ」で積んだセル */
+function replyCell(list) {
+  const c = document.createElement('td');
+  c.className = 'wrap';
+  (list || []).forEach(r => {
+    const box = document.createElement('div');
+    const by  = document.createElement('span');
+    box.className = 'rpl';
+    box.appendChild(document.createTextNode(r.text || ''));
+    by.className = 'by';
+    by.textContent = '― ' + (r.who || '職員') + (r.at ? '（' + r.at + '）' : '');
+    box.appendChild(by);
+    c.appendChild(box);
+  });
+  return c;
+}
+
 function renderUser(quiet) {
   const r   = monthData;
   const sum = document.getElementById('userSummary');
@@ -1982,24 +2134,14 @@ function renderUser(quiet) {
     tr.appendChild(td(hasS ? slot.start.taicho : ''));
     tr.appendChild(td(hasS ? slot.start.time : ''));
     tr.appendChild(td(hasE ? slot.end.time : ''));
-    tr.appendChild(td(hasE ? slot.end.kyukei : ''));
 
-    // 時間数 = 終了 − 開始 − 昼等休憩。片方しかない日は空欄。
-    let hours = '';
-    if (hasS && hasE) {
-      const st = hhmmToMin(slot.start.time);
-      const en = hhmmToMin(slot.end.time);
-      const ky = hhmmToMin(slot.end.kyukei);
-      if (st !== null && en !== null) hours = minToHHMM(en - st - (ky || 0));
-    }
-    tr.appendChild(td(hours, 'num'));
-
-    tr.appendChild(td(hasE ? slot.end.sagyo : '', 'wrap'));
-
-    // 備考。報告がない休業日は、その理由をここに出す。
-    const bikoCell = td(hasE ? slot.end.biko
-                          : (!hasS && !hasE ? (day.holiday || offWhy || '') : ''), 'wrap');
-    tr.appendChild(bikoCell);
+    /* ★2026-09-21 組み替え。利用者の自由記述（始業報告・終業報告）と、
+       それへの職員の返信を並べる。報告がない休業日は、始業報告の欄に理由を出す。 */
+    tr.appendChild(td(hasS ? slot.start.memo
+                           : (!hasE ? (day.holiday || offWhy || '') : ''), 'wrap'));
+    tr.appendChild(replyCell(hasS ? slot.start.replies : null));
+    tr.appendChild(td(hasE ? slot.end.memo : '', 'wrap'));
+    tr.appendChild(replyCell(hasE ? slot.end.replies : null));
 
     // 返信
     const rc = document.createElement('td');
@@ -2030,12 +2172,12 @@ function renderUser(quiet) {
   }
 }
 
-document.getElementById('btnMonthReload').addEventListener('click', loadMonth);
-document.getElementById('btnUserReload').addEventListener('click', loadMonth);
+document.getElementById('btnMonthReload').addEventListener('click', () => loadMonth());
+document.getElementById('btnUserReload').addEventListener('click', () => loadMonth());
 /* 月のプルダウンは3か所にある。どれを変えても3つともそろえる。 */
 function syncYm(from) {
   const v = document.getElementById(from).value;
-  ['ym', 'ym2', 'ymN', 'ymJ'].forEach(id => { document.getElementById(id).value = v; });
+  ['ym', 'ym2', 'ymN', 'ymS', 'ymJ'].forEach(id => { document.getElementById(id).value = v; });
   loadMonth();
 }
 document.getElementById('ym').addEventListener('change',  () => syncYm('ym'));
@@ -2893,13 +3035,9 @@ function downloadNippoXlsx(all) {
   }
 }
 
-document.getElementById('btnNippoReload').addEventListener('click', loadMonth);
+document.getElementById('btnNippoReload').addEventListener('click', () => loadMonth());
 document.getElementById('userSelN').addEventListener('change', () => renderNippo());
-document.getElementById('ymN').addEventListener('change', () => {
-  document.getElementById('ym').value  = document.getElementById('ymN').value;
-  document.getElementById('ym2').value = document.getElementById('ymN').value;
-  loadMonth();
-});
+document.getElementById('ymN').addEventListener('change', () => syncYm('ymN'));
 document.getElementById('btnNippoPrint').addEventListener('click', () => {
   if (!monthData) {
     showError(nippoMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
@@ -2909,6 +3047,274 @@ document.getElementById('btnNippoPrint').addEventListener('click', () => {
 });
 document.getElementById('btnNippoXlsx').addEventListener('click', () => downloadNippoXlsx(false));
 document.getElementById('btnNippoXlsxAll').addEventListener('click', () => downloadNippoXlsx(true));
+
+/* =========================================================================
+ * 支援記録（2026-09-21）
+ * -------------------------------------------------------------------------
+ * 中身は日報とほぼ同じで、備考の右に「支援内容」の欄がある。
+ * 支援員がその日の支援内容を書いて、行ごとに「保存」する（staffShien）。
+ * 保存した内容は月次データの shien に入って返ってくるので、読み込みは増えない。
+ * ★保存していない内容があるときは、利用者・月の切り替えと自動更新で消さないようにする。
+ * ★印刷は A4横。@page の向きは printWith が差し込む。
+ * ========================================================================= */
+const shienMsg = document.getElementById('shienMsg');
+var SHIEN_COLS = NIPPO_COLS.concat([{ head: '支援内容', w: 48 }]);
+let shienUser = '';     // いま表示している利用者（切り替えを取り消したときに戻す）
+
+function shienDirty() {
+  return Array.from(document.querySelectorAll('#shienSheet textarea'))
+    .some(t => t.value.trim() !== (t.dataset.saved || ''));
+}
+
+/* 月の切り替えを取り消したとき、プルダウンを読み込み済みの月に戻す */
+function restoreYm() {
+  if (!monthData) return;
+  ['ym', 'ym2', 'ymN', 'ymS', 'ymJ'].forEach(id => { document.getElementById(id).value = monthData.ym; });
+}
+
+function shienEntry(name, d) {
+  const all = (monthData && monthData.shien) || {};
+  return (all[name] || {})[String(d)] || null;
+}
+
+function shienMetaText(e) {
+  return e ? '保存済み：' + (e.by || '') + (e.at ? '（' + e.at + '）' : '') : '';
+}
+
+function renderShien() {
+  const box = document.getElementById('shienSheet');
+  box.innerHTML = '';
+  if (!monthData) return;
+
+  const book = nippoBookFor(document.getElementById('userSelS').value);
+  if (!book) {
+    box.appendChild(nippoCell('p', '利用者を選んでください。'));
+    return;
+  }
+  shienUser = book.name;
+
+  const head = document.createElement('div');
+  head.className = 'nippo-head';
+  head.appendChild(nippoCell('span',
+    '令和' + toZen(book.year - 2018) + '年 ' + toZen(book.month) + '月　支援記録', 'nippo-title'));
+  head.appendChild(nippoCell('span', '名前　' + book.name, 'nippo-name'));
+  box.appendChild(head);
+
+  const table = document.createElement('table');
+  table.className = 'nippo-table';
+  table.appendChild(nippoCell('caption',
+    book.name + 'さんの' + book.year + '年' + book.month + '月の支援記録', 'sr-only'));
+
+  const colg = document.createElement('colgroup');
+  const wSum = SHIEN_COLS.reduce((a, c) => a + c.w, 0);
+  SHIEN_COLS.forEach(c => {
+    const el = document.createElement('col');
+    el.style.width = (Math.round(c.w / wSum * 10000) / 100) + '%';
+    colg.appendChild(el);
+  });
+  table.appendChild(colg);
+
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  const th0 = nippoCell('th', SHIEN_COLS[0].head);
+  th0.colSpan = 2;
+  th0.scope = 'col';
+  htr.appendChild(th0);
+  SHIEN_COLS.slice(2).forEach(c => {
+    const th = nippoCell('th', c.head);
+    th.scope = 'col';
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  book.rows.forEach(row => {
+    const rest = !row.start && !row.end;
+    const hol  = !!row.holiday && rest;
+    const tr = document.createElement('tr');
+    if (hol) tr.className = 'hol';
+
+    tr.appendChild(nippoCell('td', book.month + '月' + row.d + '日', 'c-day'));
+    tr.appendChild(nippoCell('td', row.w, 'c-week'));
+    tr.appendChild(nippoCell('td', row.taicho, 'c-tai'));
+    tr.appendChild(nippoCell('td', row.start, 'c-time'));
+    tr.appendChild(nippoCell('td', row.end, 'c-time'));
+    tr.appendChild(nippoCell('td', row.kyukei, 'c-time'));
+    const h = nippoHours(row);
+    tr.appendChild(nippoCell('td', h === null ? '' : minToHHMM(h), 'c-time'));
+    tr.appendChild(nippoCell('td', row.sagyo, 'c-text'));
+    tr.appendChild(nippoCell('td', hol ? row.holiday : row.biko, 'c-text'));
+    tr.appendChild(shienCell(book, row));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  const sum = nippoTotals(book);
+  const tfoot = document.createElement('tfoot');
+  const ftr = document.createElement('tr');
+  const lbl = nippoCell('th', '計', 't-lbl');
+  lbl.colSpan = 3;
+  lbl.scope = 'row';
+  ftr.appendChild(lbl);
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', ''));
+  ftr.appendChild(nippoCell('td', nippoTotalText(sum.min), 't-sum'));
+  ftr.appendChild(nippoCell('td', '', 't-none'));
+  ftr.appendChild(nippoCell('td', '', 't-none'));
+  ftr.appendChild(nippoCell('td', '', 't-none'));
+  tfoot.appendChild(ftr);
+  table.appendChild(tfoot);
+  box.appendChild(table);
+
+  const use = document.createElement('p');
+  use.className = 'nippo-use';
+  use.appendChild(nippoCell('span', '利用日数　：', 'lbl'));
+  use.appendChild(nippoCell('span', String(sum.useDays)));
+  use.appendChild(document.createTextNode(' '));
+  use.appendChild(nippoCell('span', '日'));
+  box.appendChild(use);
+}
+
+/* 支援内容の欄（入力欄＋保存ボタン＋印刷用の文字） */
+function shienCell(book, row) {
+  const c = document.createElement('td');
+  c.className = 'c-shien';
+  const e = shienEntry(book.name, row.d);
+  const saved = e ? e.text : '';
+
+  const pr = document.createElement('div');       // 印刷のときだけ見える
+  pr.className = 'shien-print';
+  pr.textContent = saved;
+
+  const ta = document.createElement('textarea');
+  ta.value = saved;
+  ta.dataset.saved = saved;
+  ta.setAttribute('aria-label', book.month + '月' + row.d + '日の支援内容');
+
+  const meta = document.createElement('div');
+  meta.className = 'shien-meta';
+  const st = document.createElement('span');
+  st.className = 'st';
+  st.textContent = shienMetaText(e);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-small';
+  btn.textContent = '保存';
+  btn.setAttribute('aria-label', book.month + '月' + row.d + '日の支援内容を保存');
+  meta.appendChild(st);
+  meta.appendChild(btn);
+
+  const paint = () => {
+    const dirty = ta.value.trim() !== (ta.dataset.saved || '');
+    ta.classList.toggle('dirty', dirty);
+    st.classList.toggle('dirty', dirty);
+    st.classList.remove('err');
+    st.textContent = dirty ? '未保存' : shienMetaText(shienEntry(book.name, row.d));
+  };
+  ta.addEventListener('input', paint);
+  btn.addEventListener('click', () => saveShien(book, row, ta, btn, st, pr, paint));
+
+  c.appendChild(pr);
+  c.appendChild(ta);
+  c.appendChild(meta);
+  return c;
+}
+
+async function saveShien(book, row, ta, btn, st, pr, paint) {
+  if (isBusy(btn)) return;
+  const text = ta.value.trim();
+  const ymd  = book.year + '-' + ('0' + book.month).slice(-2) + '-' + ('0' + row.d).slice(-2);
+  setBusy(btn, '保存中');
+  try {
+    const r = await callApiRetry({
+      action: 'staffShien', token: token(), name: book.name, ymd: ymd, text: text
+    }, 2, 'entry');
+    if (r.ok) {
+      if (!monthData.shien) monthData.shien = {};
+      if (!monthData.shien[book.name]) monthData.shien[book.name] = {};
+      if (r.entry) monthData.shien[book.name][String(row.d)] = r.entry;
+      else delete monthData.shien[book.name][String(row.d)];
+      ta.value = text;
+      ta.dataset.saved = text;
+      pr.textContent = text;
+      paint();
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      st.textContent = '保存できませんでした' + (r.error === 'too_long' ? '（2000文字まで）' : '');
+      st.classList.add('err');
+    }
+  } catch (e) {
+    st.textContent = '通信に失敗しました。もう一度「保存」を押してください';
+    st.classList.add('err');
+  } finally {
+    setIdle(btn, '保存');
+  }
+}
+
+document.getElementById('btnShienReload').addEventListener('click', () => loadMonth());
+document.getElementById('ymS').addEventListener('change', () => syncYm('ymS'));
+document.getElementById('userSelS').addEventListener('change', () => {
+  const sel = document.getElementById('userSelS');
+  if (shienDirty() && !confirm('保存していない支援内容があります。保存せずに切り替えますか？')) {
+    sel.value = shienUser;
+    return;
+  }
+  renderShien();
+});
+document.getElementById('btnShienPrint').addEventListener('click', () => {
+  clearError(shienMsg);
+  if (!monthData) {
+    showError(shienMsg, 'まず「更新」を押して、月のデータを読み込んでください。');
+    return;
+  }
+  printWith('print-shien');
+});
+/* 保存していない内容があるままページを閉じようとしたら止める */
+window.addEventListener('beforeunload', e => {
+  if (shienDirty()) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* =========================================================================
+ * 5分ごとの自動更新（2026-09-21）
+ * -------------------------------------------------------------------------
+ * いま開いている画面だけを、最後に読み込んでから5分たったら裏で読み直す。
+ * ★入力の途中（返信欄を開いている・代理入力の窓・支援内容の未保存・
+ *   文字の欄にカーソルがある）は見送り、30秒後にもう一度確かめる。
+ * ★ほかのタブ・最小化で見えていないあいだは読まない。戻ってきたときに読み直す。
+ * ========================================================================= */
+const AUTO_MS = 5 * 60 * 1000;
+let lastLoadAt = 0;
+
+function markLoaded() {
+  lastLoadAt = Date.now();
+  const d = new Date(lastLoadAt);
+  document.getElementById('autoInfo').textContent =
+    '自動更新 5分ごと（最終 ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2) + '）';
+}
+
+function editingNow() {
+  if (!document.getElementById('proxyOverlay').classList.contains('hidden')) return true;
+  if (Array.from(document.querySelectorAll('.replybox textarea')).some(t => t.offsetParent !== null)) return true;
+  if (shienDirty()) return true;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|number)$/.test(a.type)))) return true;
+  return false;
+}
+
+function autoRefresh() {
+  if (document.getElementById('screen-app').classList.contains('hidden')) return;
+  if (document.hidden) return;
+  if (!lastLoadAt || Date.now() - lastLoadAt < AUTO_MS) return;
+  if (editingNow()) return;
+  if (activeMain === 'tab-home') loadHome(true);
+  else if (activeMain === 'tab-attend' && activeSub === 'sub-date') loadList(true);
+  else loadMonth(true);   // 月次・利用者ごと・日報・支援記録・実績記録票
+}
+setInterval(autoRefresh, 30 * 1000);
+document.addEventListener('visibilitychange', autoRefresh);
 
 /* =========================================================================
  * 実績記録票（様式17 就労継続支援提供実績記録票）
@@ -3186,7 +3592,18 @@ document.getElementById('btnJissekiReload').addEventListener('click', () => load
      この印で決まる（印刷用のCSSがこれを見ている）。 */
 function printWith(cls) {
   document.body.classList.add(cls);
-  const off = () => document.body.classList.remove(cls);
+  /* ★支援記録だけは A4横。@page は印の付いた body からは切り替えられないので、
+       印刷のあいだだけ向きの指定を差し込む。 */
+  let pageStyle = null;
+  if (cls === 'print-shien') {
+    pageStyle = document.createElement('style');
+    pageStyle.textContent = '@media print { @page { size: A4 landscape; margin: 8mm; } }';
+    document.head.appendChild(pageStyle);
+  }
+  const off = () => {
+    document.body.classList.remove(cls);
+    if (pageStyle) { pageStyle.remove(); pageStyle = null; }
+  };
   window.addEventListener('afterprint', off, { once: true });
   setTimeout(off, 60000);   // afterprint が来ないブラウザに備えて
   window.print();
