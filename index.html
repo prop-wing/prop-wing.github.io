@@ -1083,8 +1083,10 @@ function renderSagyoSuggest() {
     b.setAttribute('aria-label', '訓練・作業内容に「' + text + '」を入れる');
     b.addEventListener('click', () => {
       const ta = document.getElementById('sagyo');
-      ta.value = text;
+      // 置き換えたうえで改行し、次の行の頭にカーソルを置く（自由記述と同じ。末尾の改行は送信時に消える）
+      ta.value = text + '\n';
       ta.focus();   // 入力欄に移るので、読み上げが入った内容をそのまま読む
+      ta.setSelectionRange(ta.value.length, ta.value.length);
     });
     box.appendChild(b);
   });
@@ -1133,7 +1135,10 @@ function renderMemoSuggest() {
       // ★上書きせず足す。いくつか組み合わせてから書き足せるように。
       const ta = document.getElementById('memo');
       const cur = ta.value.replace(/\s+$/, '');
-      ta.value = cur ? cur + '\n' + text : text;
+      // ★最後に改行を付け、カーソルを次の行の頭に置く（2026-09-25 ユーザー:「改行した状態で書きたい」）。
+      //   末尾の改行は送信時の trim() で消えるので記録には残らない。
+      //   続けて別のボタンを押しても、上の replace で末尾の改行を落としてから足すので空行はできない。
+      ta.value = (cur ? cur + '\n' + text : text) + '\n';
       fitMemo();   // value を書き換えても input は起きないので、ここで伸ばす
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);   // 続けて書けるよう末尾へ
