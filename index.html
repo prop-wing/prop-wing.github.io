@@ -375,6 +375,10 @@
   }
   .rtrow select { flex: 0 0 5.5em; padding: 12px 6px; }
   .rtrow input  { flex: 1; }
+  /* よく使う文は長いので、文の欄だけ2段目に全幅で出す（2026-09-25） */
+  #memoTplEditList .rtrow { flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid #e3e7ec; }
+  #memoTplEditList .rtrow select { flex: 1 1 0; min-width: 0; }
+  #memoTplEditList .rtrow input  { order: 3; flex: 1 0 100%; }
   .rtrow button {
     flex: 0 0 auto;
     padding: 12px 14px;
@@ -601,6 +605,8 @@
     <div class="suggest hidden" id="memoSuggest" role="group" aria-label="よく使う文"></div>
     <textarea id="memo" style="min-height:90px" enterkeyhint="done"
               aria-describedby="hint-memo"></textarea>
+    <!-- 自分だけのよく使う文（2026-09-25）。共通の文のあとに並ぶ。 -->
+    <button type="button" id="btnMemoTplEdit" class="linkbtn">よく使う文を登録・変更する</button>
 
     <button type="button" id="btnSend" class="btn-main">送信する</button>
     <div id="reportMsg" class="msg msg-error hidden"></div>
@@ -618,6 +624,17 @@
     <div id="routineMsg" class="msg msg-error hidden"></div>
     <button type="button" id="btnRoutineSave" class="btn-main">保存する</button>
     <button type="button" id="btnRoutineBack" class="linkbtn">保存せずにもどる</button>
+  </section>
+
+  <!-- ===== 画面6: 自分のよく使う文の登録（2026-09-25） ===== -->
+  <section id="screen-memotpl" class="panel hidden" tabindex="-1" aria-labelledby="h-memotpl">
+    <h2 id="h-memotpl" class="done-title" style="margin-bottom:4px;">よく使う文</h2>
+    <p class="hint" style="text-align:center;">自分だけのよく使う文を登録しておくと、<br>自由記述のボタンに出てきます（みんな共通の文のあとに並びます）</p>
+    <div id="memoTplEditList"></div>
+    <button type="button" id="btnMemoTplAdd" class="btn-add">＋ 文を足す</button>
+    <div id="memoTplMsg" class="msg msg-error hidden"></div>
+    <button type="button" id="btnMemoTplSave" class="btn-main">保存する</button>
+    <button type="button" id="btnMemoTplBack" class="linkbtn">保存せずにもどる</button>
   </section>
 
   <!-- ===== 画面4: これまでの報告 ===== -->
@@ -661,7 +678,8 @@ const screens = {
   report:  document.getElementById('screen-report'),
   done:    document.getElementById('screen-done'),
   history: document.getElementById('screen-history'),
-  routine: document.getElementById('screen-routine')
+  routine: document.getElementById('screen-routine'),
+  memotpl: document.getElementById('screen-memotpl')
 };
 
 const WEEK_JP = ['日', '月', '火', '水', '木', '金', '土'];
@@ -1069,7 +1087,9 @@ function renderSagyoSuggest(list) {
 
 /* --- 自由記述の定型文（2026-09-21） -----------------------------------
  * 文面は「利用者定型文」シートで職員が管理し、サーバーが memoTpl として
- * ログイン・報告の応答に相乗りさせてくる。{ '始業': [...], '終業': [...] }
+ * ログイン・報告の応答に相乗りさせてくる。{ '始業': [...], '終業': [...], mine: [...] }
+ * 2026-09-25 から利用者ごとの文も入る（共通 → 本人の文の順にサーバーが並べてくる）。
+ * mine は本人の分だけ（「よく使う文を登録・変更する」の画面で使う）。
  * ★サーバーがまだ古い（memoTpl を返さない）ときに備えて、同じ文面を手元にも持つ。
  *   シートが空なら [] が返るので、そのときはボタンを出さない（手元の文面も使わない）。
  * --------------------------------------------------------------------- */
@@ -1474,7 +1494,18 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
   if (!pendingReqId) pendingReqId = newReqId();
 
-  const fields = { kubun: currentKubun, time, taicho, kyukei, sagyo, biko, memo };
+  /* ★区分に関係のない項目は送らない（2026-09-25）。
+   * 「いつもの予定」のチェック欄は始業のときも隠れているだけでチェックが入っているので、
+   * そのままだと始業の送信完了画面に備考として出ていた。サーバーは捨てていたが画面には残った。 */
+  const isEnd  = currentKubun === '終業';
+  const fields = {
+    kubun: currentKubun, time,
+    taicho: isEnd ? '' : taicho,
+    kyukei: isEnd ? kyukei : '',
+    sagyo:  isEnd ? sagyo  : '',
+    biko:   isEnd ? biko   : '',
+    memo
+  };
 
   setBusy(btn, '送信しています…');
   showWaitNote(reportMsg);
@@ -1639,6 +1670,130 @@ document.getElementById('btnRoutineSave').addEventListener('click', async () => 
     }
   } catch (e) {
     showError(routineMsg, '通信に失敗しました。電波の状態を確認して、もう一度「保存する」を押してください。');
+  } finally {
+    setIdle(btn, '保存する');
+  }
+});
+
+/* --- 自分のよく使う文の登録画面（2026-09-25） --------------------------
+ * 「利用者定型文」シートの C列に本人の名前が入った行を、画面から入れ替える。
+ * 共通の文（C列が空欄）は職員がシートで管理するので、ここには出さない。
+ * サーバーは memoTpl.mine に本人の分だけを {kubun, text} で入れてくる。
+ * いつもの予定の登録画面と同じ作り（行の見た目も .rtrow を使い回している）。
+ * --------------------------------------------------------------------- */
+const memoTplMsg = document.getElementById('memoTplMsg');
+
+function memoTplRow(kubun, text) {
+  const row = document.createElement('div');
+  const sel = document.createElement('select');
+  const inp = document.createElement('input');
+  const del = document.createElement('button');
+  row.className = 'rtrow';
+
+  ['始業', '終業'].forEach(k => {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = k;
+    sel.appendChild(o);
+  });
+  sel.value = kubun || currentKubun || '始業';
+
+  inp.type = 'text';
+  inp.value = text || '';
+  inp.maxLength = 200;
+  inp.placeholder = '例：今日は午後から通院します。';
+
+  del.type = 'button';
+  del.textContent = '削除';
+  del.addEventListener('click', () => {
+    // 消したあとのフォーカスの行き先を先に決めておく（いつもの予定と同じ）
+    const box  = document.getElementById('memoTplEditList');
+    const rows = Array.from(box.querySelectorAll('.rtrow'));
+    const next = rows[rows.indexOf(row) + 1] || rows[rows.indexOf(row) - 1];
+    const gone = inp.value.trim();
+    row.remove();
+    renumberMemoTplRows();
+    (next ? next.querySelector('input') : document.getElementById('btnMemoTplAdd')).focus();
+    announce((gone ? gone : '空の行') + 'を削除しました。');
+  });
+
+  row.appendChild(sel);
+  row.appendChild(inp);
+  row.appendChild(del);
+  return row;
+}
+
+function renumberMemoTplRows() {
+  document.querySelectorAll('#memoTplEditList .rtrow').forEach((row, i) => {
+    const n = (i + 1) + '件目';
+    row.querySelector('select').setAttribute('aria-label', n + 'の区分');
+    row.querySelector('input').setAttribute('aria-label', n + 'の文');
+    row.querySelector('button').setAttribute('aria-label', n + 'の文を削除');
+  });
+}
+
+function renderMemoTplEditor() {
+  const box  = document.getElementById('memoTplEditList');
+  const mine = (currentMemoTpl && currentMemoTpl.mine) || [];
+  box.innerHTML = '';
+  mine.forEach(t => box.appendChild(memoTplRow(t.kubun, t.text)));
+  if (!mine.length) box.appendChild(memoTplRow('', ''));
+  renumberMemoTplRows();
+}
+
+document.getElementById('btnMemoTplEdit').addEventListener('click', () => {
+  clearError(memoTplMsg);
+  renderMemoTplEditor();
+  show('memotpl');
+  const n = ((currentMemoTpl && currentMemoTpl.mine) || []).length;
+  setTimeout(() => announce('登録されている自分の文は' + n + '件です。'), 500);
+});
+
+document.getElementById('btnMemoTplAdd').addEventListener('click', () => {
+  const row = memoTplRow('', '');
+  document.getElementById('memoTplEditList').appendChild(row);
+  renumberMemoTplRows();
+  row.querySelector('input').focus();
+  announce('文の行を足しました。');
+});
+
+document.getElementById('btnMemoTplBack').addEventListener('click', () => show('report'));
+
+document.getElementById('btnMemoTplSave').addEventListener('click', async () => {
+  const btn = document.getElementById('btnMemoTplSave');
+  if (isBusy(btn)) return;
+  clearError(memoTplMsg);
+
+  const list = Array.from(document.querySelectorAll('#memoTplEditList .rtrow'))
+    .map(row => ({
+      kubun: row.querySelector('select').value,
+      text:  row.querySelector('input').value.trim()
+    }))
+    .filter(t => t.text);          // 空の行は登録しない
+
+  setBusy(btn, '保存しています…');
+  try {
+    const r = await callApiRetry({
+      action: 'memoTplSave',
+      token: localStorage.getItem(TOKEN_KEY),
+      memoTpl: list
+    }, 2, 'memoTpl');
+
+    if (r.ok) {
+      takeMemoTpl(r);
+      renderMemoSuggest();
+      show('report');
+      setTimeout(() => announce('よく使う文を'
+        + ((currentMemoTpl.mine || []).length) + '件で保存しました。'), 500);
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else if (r.error === 'too_many') {
+      showError(memoTplMsg, '始業・終業それぞれ12件まで登録できます。');
+    } else {
+      showError(memoTplMsg, '保存できませんでした。入力内容を確認して、もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(memoTplMsg, '通信に失敗しました。電波の状態を確認して、もう一度「保存する」を押してください。');
   } finally {
     setIdle(btn, '保存する');
   }
