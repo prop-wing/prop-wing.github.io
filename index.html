@@ -566,8 +566,10 @@
       <p class="hint" id="hint-sagyo">今日おこなった内容を書いてください（簡単で結構です）</p>
       <textarea id="sagyo" style="min-height:80px" enterkeyhint="done"
                 aria-describedby="hint-sagyo"></textarea>
-      <p class="suggest-label hidden" id="sagyoSuggestLabel">前に書いた内容（押すと入ります）</p>
-      <div class="suggest" id="sagyoSuggest" role="group" aria-label="前に書いた内容"></div>
+      <!-- ★2026-09-25 から「前に書いた内容」ではなく、登録した定型文（利用者定型文シートの区分「作業」）を出す -->
+      <p class="suggest-label hidden" id="sagyoSuggestLabel">よく使う内容（押すと入ります）</p>
+      <div class="suggest" id="sagyoSuggest" role="group" aria-label="よく使う内容"></div>
+      <button type="button" id="btnSagyoTplEdit" class="linkbtn">よく使う内容を登録・変更する</button>
 
       <!-- いつもの予定。登録があるときだけ、その曜日の分が出る -->
       <div id="routineWrap" class="hidden">
@@ -629,7 +631,7 @@
   <!-- ===== 画面6: 自分のよく使う文の登録（2026-09-25） ===== -->
   <section id="screen-memotpl" class="panel hidden" tabindex="-1" aria-labelledby="h-memotpl">
     <h2 id="h-memotpl" class="done-title" style="margin-bottom:4px;">よく使う文</h2>
-    <p class="hint" style="text-align:center;">自分だけのよく使う文を登録しておくと、<br>自由記述のボタンに出てきます（みんな共通の文のあとに並びます）</p>
+    <p class="hint" style="text-align:center;">自分だけのよく使う文を登録しておくと、<br>ボタンとして出てきます（みんな共通の文のあとに並びます）。<br>「あいさつ」は自由記述、「作業内容」は訓練・作業内容の欄に出ます</p>
     <div id="memoTplEditList"></div>
     <button type="button" id="btnMemoTplAdd" class="btn-add">＋ 文を足す</button>
     <div id="memoTplMsg" class="msg msg-error hidden"></div>
@@ -1060,14 +1062,16 @@ function todayStatusSentence() {
   return head + part('始業', 'start') + '。' + part('終業', 'end') + '。';
 }
 
-/* 本人が前に書いた訓練・作業内容をボタンで並べる。
- * ★ここに出るのは必ず本人の入力だけ(サーバー側で名前で絞っている)。
- *   他の利用者の入力を混ぜてはいけない。 */
-function renderSagyoSuggest(list) {
+/* 訓練・作業内容の定型文をボタンで並べる。
+ * ★2026-09-25 から「前に書いた内容（サーバーの sagyoList）」をやめ、
+ *   利用者定型文シートの区分「作業」（共通 → 本人の文）を出す（ユーザーの選択）。
+ *   押すと入力欄を置き換える（書き足さない）のは前のまま。
+ *   引数は受け取るが使わない（呼び出し元に sagyoList を渡している箇所が残っているため）。 */
+function renderSagyoSuggest() {
   const box   = document.getElementById('sagyoSuggest');
   const label = document.getElementById('sagyoSuggestLabel');
   box.innerHTML = '';
-  const items = Array.isArray(list) ? list : [];
+  const items = (currentMemoTpl && currentMemoTpl['作業']) || [];
   label.classList.toggle('hidden', items.length === 0);
 
   items.forEach(text => {
@@ -1101,6 +1105,7 @@ let currentMemoTpl = MEMO_TPL_FALLBACK;
 
 function takeMemoTpl(r) {
   if (r && r.memoTpl) currentMemoTpl = r.memoTpl;
+  renderSagyoSuggest();   // 作業内容の定型文も同じ memoTpl に入っている
 }
 
 function renderMemoSuggest() {
@@ -1690,18 +1695,23 @@ function memoTplRow(kubun, text) {
   const del = document.createElement('button');
   row.className = 'rtrow';
 
-  ['始業', '終業'].forEach(k => {
+  // 区分「作業」は訓練・作業内容のボタン（2026-09-25）。ほかの2つは自由記述のボタン
+  [['始業', '始業のあいさつ'], ['終業', '終業のあいさつ'], ['作業', '作業内容']].forEach(([k, label]) => {
     const o = document.createElement('option');
     o.value = k;
-    o.textContent = k;
+    o.textContent = label;
     sel.appendChild(o);
   });
-  sel.value = kubun || currentKubun || '始業';
+  sel.value = kubun || memoTplDefaultKubun || currentKubun || '始業';
 
   inp.type = 'text';
   inp.value = text || '';
   inp.maxLength = 200;
-  inp.placeholder = '例：今日は午後から通院します。';
+  const setPh = () => {
+    inp.placeholder = sel.value === '作業' ? '例：文字起こし業務' : '例：今日は午後から通院します。';
+  };
+  setPh();
+  sel.addEventListener('change', setPh);
 
   del.type = 'button';
   del.textContent = '削除';
@@ -1732,22 +1742,30 @@ function renumberMemoTplRows() {
   });
 }
 
+// 新しい行の区分の初期値。どちらの「登録・変更する」から開いたかで変える
+let memoTplDefaultKubun = '';
+
 function renderMemoTplEditor() {
   const box  = document.getElementById('memoTplEditList');
   const mine = (currentMemoTpl && currentMemoTpl.mine) || [];
   box.innerHTML = '';
   mine.forEach(t => box.appendChild(memoTplRow(t.kubun, t.text)));
-  if (!mine.length) box.appendChild(memoTplRow('', ''));
+  // 開いた入口の区分がまだ1件も無ければ、空の行を1つ用意しておく
+  if (!mine.some(t => t.kubun === memoTplDefaultKubun)) box.appendChild(memoTplRow('', ''));
   renumberMemoTplRows();
 }
 
-document.getElementById('btnMemoTplEdit').addEventListener('click', () => {
+function openMemoTplEditor(kubun) {
+  memoTplDefaultKubun = kubun;
   clearError(memoTplMsg);
   renderMemoTplEditor();
   show('memotpl');
   const n = ((currentMemoTpl && currentMemoTpl.mine) || []).length;
   setTimeout(() => announce('登録されている自分の文は' + n + '件です。'), 500);
-});
+}
+
+document.getElementById('btnMemoTplEdit').addEventListener('click', () => openMemoTplEditor(currentKubun || '始業'));
+document.getElementById('btnSagyoTplEdit').addEventListener('click', () => openMemoTplEditor('作業'));
 
 document.getElementById('btnMemoTplAdd').addEventListener('click', () => {
   const row = memoTplRow('', '');
@@ -1788,7 +1806,7 @@ document.getElementById('btnMemoTplSave').addEventListener('click', async () => 
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else if (r.error === 'too_many') {
-      showError(memoTplMsg, '始業・終業それぞれ12件まで登録できます。');
+      showError(memoTplMsg, '始業・終業・作業内容それぞれ12件まで登録できます。');
     } else {
       showError(memoTplMsg, '保存できませんでした。入力内容を確認して、もう一度お試しください。');
     }
