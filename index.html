@@ -605,7 +605,8 @@
     <label for="memo">自由記述</label>
     <p class="hint" id="hint-memo">挨拶や、業務と関係のない話などをどうぞ。下のボタンを押すと文が入り、そのあと書き足せます</p>
     <div class="suggest hidden" id="memoSuggest" role="group" aria-label="よく使う文"></div>
-    <textarea id="memo" style="min-height:90px" enterkeyhint="done"
+    <!-- 2026-09-25: 最初から4行ぶんの高さ。行が増えると fitMemo() で伸びる -->
+    <textarea id="memo" style="min-height:150px; overflow-y:hidden" enterkeyhint="done"
               aria-describedby="hint-memo"></textarea>
     <!-- 自分だけのよく使う文（2026-09-25）。共通の文のあとに並ぶ。 -->
     <button type="button" id="btnMemoTplEdit" class="linkbtn">よく使う文を登録・変更する</button>
@@ -1108,6 +1109,15 @@ function takeMemoTpl(r) {
   renderSagyoSuggest();   // 作業内容の定型文も同じ memoTpl に入っている
 }
 
+/* 自由記述の箱を中身の行数に合わせて伸び縮みさせる（2026-09-25）。
+ * 最小の高さは textarea の min-height（150px）。* は border-box なので、
+ * scrollHeight（中身＋上下の余白）に枠の太さを足せばちょうど収まる。 */
+function fitMemo() {
+  const ta = document.getElementById('memo');
+  ta.style.height = 'auto';
+  ta.style.height = (ta.scrollHeight + ta.offsetHeight - ta.clientHeight) + 'px';
+}
+
 function renderMemoSuggest() {
   const box  = document.getElementById('memoSuggest');
   const list = (currentMemoTpl && currentMemoTpl[currentKubun]) || [];
@@ -1124,6 +1134,7 @@ function renderMemoSuggest() {
       const ta = document.getElementById('memo');
       const cur = ta.value.replace(/\s+$/, '');
       ta.value = cur ? cur + '\n' + text : text;
+      fitMemo();   // value を書き換えても input は起きないので、ここで伸ばす
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);   // 続けて書けるよう末尾へ
     });
@@ -1240,6 +1251,7 @@ function enterReport(name, today, sagyoList, routines, recent, last) {
 
   selectNearestTime(timeList);
   document.getElementById('memo').value   = '';
+  fitMemo();   // 前の報告で伸びた箱を元の高さに戻す
   document.getElementById('sagyo').value  = '';
   document.getElementById('biko').value   = '';
   document.getElementById('kyukei').value = '';
@@ -1551,6 +1563,8 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 document.getElementById('btnAgain').addEventListener('click', () => enterReport(currentName, currentToday, undefined, undefined, currentRecent, undefined));
 
 document.getElementById('biko').addEventListener('input', updateBikoPreview);
+document.getElementById('memo').addEventListener('input', fitMemo);
+window.addEventListener('resize', fitMemo);   // スマホを横にすると折り返しが変わるため
 
 document.getElementById('target').addEventListener('change', e => {
   clearError(reportMsg);
