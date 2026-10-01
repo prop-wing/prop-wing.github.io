@@ -619,7 +619,9 @@
     display: block; width: 100%; min-height: 48px;
     font: inherit; font-size: 12px; line-height: 1.45;
     padding: 4px 6px; border: 1px solid #b8c0cc; border-radius: 4px;
-    resize: vertical; background: #fff;
+    background: #fff;
+    /* ★高さは fitShien() が文章の長さに合わせて決める（2026-10-02）。中にスクロールは出さない */
+    resize: none; overflow-y: hidden;
   }
   .shien td.c-shien textarea.dirty { border-color: #d98c00; background: #fffaf0; }
   .shien .shien-meta {
@@ -3327,7 +3329,21 @@ function renderShien() {
   use.appendChild(document.createTextNode(' '));
   use.appendChild(nippoCell('span', '日'));
   box.appendChild(use);
+  fitAllShien();
 }
+
+/* 支援内容の欄の高さを、中の文章が全部見える高さにする（2026-10-02）。
+ * ★画面に出ていない（タブが隠れている）あいだは高さが測れないので何もしない。
+ *   表を描いたあと・タブを開いたとき・ウィンドウの幅が変わったときに fitAllShien() で測り直す。 */
+function fitShien(ta) {
+  if (!ta || ta.offsetParent === null) return;
+  ta.style.height = 'auto';
+  ta.style.height = (ta.scrollHeight + 2) + 'px';     // +2 は上下の枠線ぶん
+}
+function fitAllShien() {
+  document.querySelectorAll('#shienSheet td.c-shien textarea').forEach(fitShien);
+}
+window.addEventListener('resize', fitAllShien);
 
 /* 支援内容の欄（入力欄＋保存ボタン＋印刷用の文字） */
 function shienCell(book, row) {
@@ -3365,7 +3381,7 @@ function shienCell(book, row) {
     st.classList.remove('err');
     st.textContent = dirty ? '未保存' : shienMetaText(shienEntry(book.name, row.d));
   };
-  ta.addEventListener('input', paint);
+  ta.addEventListener('input', () => { paint(); fitShien(ta); });
   btn.addEventListener('click', () => saveShien(book, row, ta, btn, st, pr, paint));
 
   c.appendChild(pr);
@@ -3392,6 +3408,7 @@ async function saveShien(book, row, ta, btn, st, pr, paint) {
       ta.dataset.saved = text;
       pr.textContent = text;
       paint();
+      fitShien(ta);
     } else if (r.error === 'unauthorized') {
       logout('ログインの有効期限が切れました。もう一度ログインしてください。');
     } else {
