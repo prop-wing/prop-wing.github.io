@@ -687,6 +687,69 @@
   /* 外枠だけ太くする（ひな形と同じ見え方にするため） */
   table.jisseki-table, table.jisseki-foot { border: 2px solid #333; }
 
+  /* ===== 受給者証の更新（メイン画面のお知らせ） ===== */
+  .renew {
+    margin: 14px 0 4px;
+    padding: 12px 16px;
+    border: 2px solid var(--error);
+    border-radius: 10px;
+    background: var(--error-bg);
+  }
+  .renew-h { margin: 0 0 4px; font-size: 16px; color: var(--error); }
+  .renew ul { margin: 0; padding-left: 1.3em; }
+  .renew li { margin: 2px 0; }
+  .renew li.rn-now  { font-weight: 700; color: var(--error); font-size: 17px; }
+  .renew li.rn-soon { color: var(--warn); }
+  .renew li.rn-past, .renew li.rn-bad { color: var(--text); font-size: 15px; }
+  .renew .until { font-weight: 400; font-size: 14px; color: var(--muted); }
+
+  /* ===== 面談記録 ===== */
+  .mendan-sum {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    background: #eef4fb;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  .mendan-sum strong { font-size: 17px; }
+  .mendan-editor {
+    margin: 0 0 18px;
+    padding: 16px 18px 18px;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    background: #fff;
+  }
+  .mendan-editor h3 { margin: 0 0 4px; font-size: 18px; }
+  .mendan-editor .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0 16px;
+  }
+  .mendan-editor label { margin: 12px 0 4px; font-size: 15px; }
+  .mendan-editor .req { color: var(--error); font-size: 13px; margin-left: 4px; }
+  .mendan-editor .fhint { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .mendan-editor input[type="text"], .mendan-editor input[type="date"],
+  .mendan-editor select { padding: 9px 10px; font-size: 16px; }
+  .mendan-editor textarea { min-height: 70px; padding: 9px 10px; font-size: 16px; }
+  .mendan-editor .ops { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .mendan-editor .ops .btn-main { width: auto; margin: 0; padding: 11px 28px; }
+  .mendan-card .top h3 { margin: 0; font-size: 18px; }
+  .mendan-card .kindtag {
+    display: inline-block; padding: 1px 10px; border-radius: 999px;
+    font-size: 13px; font-weight: 700; background: #e3ecf7; color: var(--accent-dk);
+  }
+  .mendan-card .meta { font-size: 14px; color: var(--muted); margin: 0 0 6px; }
+  .mendan-card .item dt { flex-basis: 11em; }
+  .mendan-card .foot {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 8px; font-size: 13px; color: var(--muted);
+  }
+  .mendan-card .foot .sp { margin-right: auto; }
+  .mendan-card .foot button { padding: 5px 14px; font-size: 14px; }
+  .btn-danger { background: #fff; border: 2px solid var(--error); color: var(--error); }
+  .btn-danger:hover { background: var(--error-bg); }
+  .mendan-print-head { display: none; }
+
   /* =====================================================================
    * 印刷（A4縦1枚に収める）
    * ---------------------------------------------------------------------
@@ -718,6 +781,18 @@
     body.print-jisseki table.jisseki-table th { font-size: 7pt; }
     body.print-jisseki table.jisseki-table tbody td { height: 6.6mm; }
     body.print-jisseki .jisseki-title { font-size: 13pt; }
+
+    /* 面談記録（A4縦。何枚になってもよい。ボタン類は出さない） */
+    body.print-mendan #mendanList,
+    body.print-mendan #mendanList * { visibility: visible; }
+    body.print-mendan #mendanList {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+    }
+    body.print-mendan .mendan-print-head { display: block; font-size: 15pt; font-weight: 700; margin: 0 0 6px; }
+    body.print-mendan .mendan-card { break-inside: avoid; background: #fff; font-size: 10pt; }
+    body.print-mendan .mendan-card .foot button { display: none; }
 
     /* 支援記録（A4横。@page の向きは printWith が差し込む） */
     body.print-shien #shienSheet,
@@ -861,6 +936,8 @@
               aria-controls="panel-home"   aria-selected="true">メイン</button>
       <button type="button" role="tab" id="tab-attend"
               aria-controls="panel-attend" aria-selected="false" tabindex="-1">始業・終業管理</button>
+      <button type="button" role="tab" id="tab-mendan"
+              aria-controls="panel-mendan" aria-selected="false" tabindex="-1">面談記録</button>
       <button type="button" role="tab" id="tab-nippo"
               aria-controls="panel-nippo"  aria-selected="false" tabindex="-1">日報</button>
       <button type="button" role="tab" id="tab-shien"
@@ -877,6 +954,13 @@
       </div>
 
       <div id="homeHoliday" class="msg msg-info hidden"></div>
+
+      <!-- 受給者証の更新月のお知らせ（2026-10-02）。
+           ウィング利用者シート H列「受給者証の有効期限」から、サーバーが今月・来月・期限切れを選んで返す。 -->
+      <div id="homeRenew" class="renew hidden" role="region" aria-labelledby="h-renew">
+        <h2 id="h-renew" class="renew-h">受給者証の更新</h2>
+        <ul id="renewList"></ul>
+      </div>
 
       <div class="tiles" id="homeTiles">
         <div class="tile" id="tileYet">
@@ -1025,6 +1109,38 @@
         </div>
         <div id="userMsg" class="msg msg-error hidden"></div>
       </div>
+    </div>
+
+    <!-- ---------- 面談記録（2026-10-02） ----------
+         利用者を選ぶと、その方の面談記録が時系列で並ぶ。書く・直す・消すはここから。
+         記録はスプレッドシートの「面談記録」シート（1回の面談＝1行）。
+         ★項目は MENDAN_FIELDS（このファイルの中）の1か所で決めている。
+           項目を足す・名前を変えるときはそこだけ直せばよい（サーバーが列を自動で足す。デプロイ不要）。 -->
+    <div id="panel-mendan" role="tabpanel" tabindex="-1" aria-labelledby="tab-mendan" class="hidden">
+      <div class="bar">
+        <label class="inline" for="userSelM">利用者
+          <select id="userSelM"></select>
+        </label>
+        <label class="inline" for="mendanOrder">並び順
+          <select id="mendanOrder">
+            <option value="new">新しい順</option>
+            <option value="old">古い順</option>
+          </select>
+        </label>
+        <span style="margin-right:auto;"></span>
+        <button type="button" id="btnMendanReload" class="btn-small">更新</button>
+      </div>
+
+      <div class="bar">
+        <button type="button" id="btnMendanNew" class="btn-small">＋ 新しい面談記録を書く</button>
+        <button type="button" id="btnMendanPrint" class="btn-small">この方の面談記録を印刷する</button>
+      </div>
+
+      <div id="mendanMsg" class="msg msg-error hidden"></div>
+
+      <div id="mendanEditor" class="mendan-editor hidden" role="region" aria-labelledby="h-mendanEd"></div>
+
+      <div id="mendanList"></div>
     </div>
 
     <!-- ---------- 日報 ----------
@@ -1450,7 +1566,7 @@ let templates = { '始業': [], '終業': [] };
 /* どのページを読み込み済みか。
  * stale は「別のページで返信したので数字が古くなっている」という印。
  * タブを開いたときに読み直す。 */
-const loaded = { home: false, list: false, month: false };
+const loaded = { home: false, list: false, month: false, mendan: false };
 const stale  = { home: false, list: false, month: false };
 
 let mainTabs = null, attendTabs = null, activeSub = 'sub-date';
@@ -1475,6 +1591,12 @@ function onMainTab(id) {
   activeMain = id;
   if (id === 'tab-home' && (!loaded.home || stale.home)) loadHome();
   if (id === 'tab-attend') onAttendTab(activeSub);
+
+  /* 面談記録は専用のデータ（全員ぶん）を1回読む。以後は描き直すだけ。 */
+  if (id === 'tab-mendan') {
+    if (!loaded.mendan) loadMendan();
+    else renderMendan();
+  }
 
   /* 日報は「始業・終業管理」と同じ月次データから作る。
      すでに読んであれば描き直すだけでよい（通信しない）。 */
@@ -1642,6 +1764,8 @@ function renderHome(quiet) {
   setTile('tileYet', 'numYet', yet.length);
   setTile('tileNo',  'numNo',  noRep, rest);
 
+  renderRenew(r.renew);
+
   // --- 本日の状況の表 ---
   const tb = document.getElementById('homeTbody');
   tb.innerHTML = '';
@@ -1744,6 +1868,39 @@ function renderHome(quiet) {
     announce(r.date + 'の状況です。未返信の報告は' + yet.length + '件、'
       + (rest ? '本日は休業日です。' : 'まだ始業の報告がない方は' + noRep + '名です。'));
   }
+}
+
+/* 受給者証の更新月のお知らせ（2026-10-02）。
+ * サーバーが { month, next, now:[], soon:[], past:[], bad:[] } を返す。
+ * 各要素は { name, until }。1つも無ければ欄ごと隠す。
+ * ★サーバーが古い（renew を返さない）ときも隠すだけで、何も壊れない。 */
+function renderRenew(rn) {
+  const box  = document.getElementById('homeRenew');
+  const list = document.getElementById('renewList');
+  list.innerHTML = '';
+  if (!rn) { box.classList.add('hidden'); return; }
+
+  function li(cls, before, it, after) {
+    const e = document.createElement('li');
+    e.className = cls;
+    e.appendChild(document.createTextNode(before + it.name + 'さん'));
+    if (it.until) {
+      const u = document.createElement('span');
+      u.className = 'until';
+      u.textContent = '（' + it.until + '）';
+      e.appendChild(u);
+    }
+    e.appendChild(document.createTextNode(after));
+    list.appendChild(e);
+  }
+  (rn.now  || []).forEach(it => li('rn-now',  '今月（' + rn.month + '月）は ', it, ' の受給者証の更新月です。'));
+  (rn.soon || []).forEach(it => li('rn-soon', '来月（' + rn.next  + '月）は ', it, ' の更新月です。'));
+  (rn.past || []).forEach(it => li('rn-past', '', it,
+    ' の受給者証は有効期限を過ぎています。更新が済んでいれば、ウィング利用者シートH列を新しい期限に書き換えてください。'));
+  (rn.bad  || []).forEach(it => li('rn-bad', '', { name: it.name, until: '' },
+    ' の有効期限「' + it.until + '」が読み取れません。2027/3/31 のように書いてください。'));
+
+  box.classList.toggle('hidden', !list.children.length);
 }
 
 /* 返信したあと、表とカードは作り直さずに数字だけ直す。
@@ -3269,7 +3426,7 @@ document.getElementById('btnShienPrint').addEventListener('click', () => {
 });
 /* 保存していない内容があるままページを閉じようとしたら止める */
 window.addEventListener('beforeunload', e => {
-  if (shienDirty()) { e.preventDefault(); e.returnValue = ''; }
+  if (shienDirty() || mendanDirty()) { e.preventDefault(); e.returnValue = ''; }
 });
 
 /* =========================================================================
@@ -3294,6 +3451,7 @@ function editingNow() {
   if (!document.getElementById('proxyOverlay').classList.contains('hidden')) return true;
   if (Array.from(document.querySelectorAll('.replybox textarea')).some(t => t.offsetParent !== null)) return true;
   if (shienDirty()) return true;
+  if (mendanDirty()) return true;
   const a = document.activeElement;
   if (a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|number)$/.test(a.type)))) return true;
   return false;
@@ -3305,6 +3463,7 @@ function autoRefresh() {
   if (!lastLoadAt || Date.now() - lastLoadAt < AUTO_MS) return;
   if (editingNow()) return;
   if (activeMain === 'tab-home') loadHome(true);
+  else if (activeMain === 'tab-mendan') loadMendan(true);
   else if (activeMain === 'tab-attend' && activeSub === 'sub-date') loadList(true);
   else loadMonth(true);   // 月次・利用者ごと・日報・支援記録・実績記録票
 }
@@ -3610,6 +3769,481 @@ document.getElementById('btnJissekiPdf').addEventListener('click', () => {
     return;
   }
   printWith('print-jisseki');
+});
+
+
+/* =====================================================================
+ * 面談記録（2026-10-02）
+ * ---------------------------------------------------------------------
+ * 利用者を選ぶと、その方の面談記録が時系列で並ぶ。ここから書く・直す・消す。
+ * 記録はスプレッドシートの「面談記録」シート（1回の面談＝1行）。
+ *
+ * ★項目は MENDAN_FIELDS の1か所だけで決めている。
+ *   ・項目を足す／名前を変える … ここを直してアップロードするだけ（デプロイ不要）。
+ *     サーバーは知らない項目名が来たら、シートに列を自動で足す。
+ *   ・名前を変えた場合、古い列はシートに残り、画面のカードにも「その他の項目」として出る。
+ *   type: select（選ぶ）/ text（1行）/ area（複数行）/ date（日付）
+ *   staff: true … 新しく書くとき、ログイン中の職員名を最初から入れておく
+ * ★たたき台（2026-10-02）。就労継続支援のモニタリング・ケース記録の
+ *   一般的な項目（本人の希望・体調・生活・作業・目標の振り返り・所見・今後の方針・次回予定）から作った。
+ * ===================================================================== */
+const MENDAN_FIELDS = [
+  { key: '面談の種類', type: 'select', required: true,
+    options: ['定期面談', 'モニタリング（個別支援計画の振り返り）', '個別支援計画の作成・見直し',
+              '受給者証の更新・契約', '随時の相談', 'その他'] },
+  { key: '方法', type: 'select', options: ['事業所で対面', '自宅訪問', '電話', 'オンライン', 'その他'] },
+  { key: '面談した職員', type: 'text', staff: true },
+  { key: '同席者', type: 'text', hint: 'ご家族・相談支援専門員など' },
+  { key: '本人の話・希望', type: 'area', hint: '本人の言葉をなるべくそのまま' },
+  { key: '体調・通院・服薬', type: 'area' },
+  { key: '生活の様子', type: 'area', hint: '睡眠・食事・家庭・金銭・余暇など' },
+  { key: '通所・作業の様子', type: 'area', hint: '通所の状況・作業への取り組み・人との関わりなど' },
+  { key: '目標の振り返り', type: 'area', hint: '個別支援計画の目標がどこまで進んだか' },
+  { key: '目標の達成状況', type: 'select', options: ['達成', 'おおむね達成', '取り組み中', '未達成', '見直しが必要'] },
+  { key: '職員の所見・助言', type: 'area' },
+  { key: '今後の方針・次回までの課題', type: 'area' },
+  { key: '次回面談の予定日', type: 'date' }
+];
+const MENDAN_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+
+const mendanMsg = document.getElementById('mendanMsg');
+let mendanData = null;     // { names: [...], records: [{ id, name, date, by, upd, at, f: {項目: 値} }] }
+let mendanEdit = null;     // 書いている途中の記録 { id, isNew, name, snap }
+let mendanUser = '';       // いま選んでいる利用者（切り替えを取り消したときに戻すため）
+
+/* '2026-10-02' → '2026年10月2日（金）' */
+function mendanDate(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '');
+  if (!m) return ymd || '';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return m[1] + '年' + (+m[2]) + '月' + (+m[3]) + '日（' + MENDAN_WEEK[d.getDay()] + '）';
+}
+
+function showMendanInfo(text) {
+  mendanMsg.textContent = text;
+  mendanMsg.classList.add('msg-wait');
+  mendanMsg.classList.remove('msg-error', 'msg-info', 'hidden');
+  announce(text);
+}
+
+async function loadMendan(silent) {
+  const quiet = silent === true;
+  const btn = document.getElementById('btnMendanReload');
+  if (isBusy(btn)) return;
+  clearError(mendanMsg);
+  const listEl = document.getElementById('mendanList');
+  if (!quiet && !mendanData) loadingBox(listEl);
+
+  setBusy(btn, '更新中');
+  try {
+    const r = await callApiRetry({ action: 'staffMendan', op: 'list', token: token() }, 2, 'records');
+    if (r.ok) {
+      mendanData = { names: r.names || [], records: r.records || [] };
+      loaded.mendan = true;
+      markLoaded();
+      fillMendanUsers();
+      renderMendan();
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else if (!quiet) {
+      showError(mendanMsg, r.error === 'unknown_action'
+        ? 'サーバーがまだ面談記録に対応していません（Apps Script の新しいバージョンのデプロイが必要です）。'
+        : '読み込めませんでした。「更新」を押して、もう一度お試しください。');
+    }
+  } catch (e) {
+    if (!quiet) showError(mendanMsg, '通信に失敗しました。電波の状態を確認して、「更新」を押してください。');
+  } finally {
+    setIdle(btn, '更新');
+    if (!mendanData) listEl.innerHTML = '';
+  }
+}
+
+/* 利用者のプルダウン。選んでいた人はそのまま残す。 */
+function fillMendanUsers() {
+  const sel = document.getElementById('userSelM');
+  const keep = mendanUser || sel.value;
+  sel.innerHTML = '';
+  (mendanData.names || []).forEach(nm => {
+    const o = document.createElement('option');
+    o.value = nm; o.textContent = nm;
+    sel.appendChild(o);
+  });
+  if (keep && mendanData.names.indexOf(keep) >= 0) sel.value = keep;
+  mendanUser = sel.value;
+}
+
+function mendanRecordsOf(name) {
+  const recs = (mendanData ? mendanData.records : []).filter(r => r.name === name);
+  recs.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.id < b.id ? -1 : 1));
+  if (document.getElementById('mendanOrder').value === 'new') recs.reverse();
+  return recs;
+}
+
+function renderMendan() {
+  const listEl = document.getElementById('mendanList');
+  if (!mendanData) return;
+  const name = document.getElementById('userSelM').value;
+  listEl.innerHTML = '';
+  if (!name) {
+    listEl.innerHTML = '<p class="hint">ウィング利用者シートに利用者が登録されていません。</p>';
+    return;
+  }
+
+  const recs = mendanRecordsOf(name);
+
+  const ph = document.createElement('div');
+  ph.className = 'mendan-print-head';
+  ph.textContent = name + 'さん　面談記録';
+  listEl.appendChild(ph);
+
+  // 上の帯: 件数・最新・次回の予定
+  const sum = document.createElement('p');
+  sum.className = 'mendan-sum';
+  const st = document.createElement('strong');
+  st.textContent = name + 'さん';
+  sum.appendChild(st);
+  let txt = '　面談記録 ' + recs.length + '件';
+  if (recs.length) {
+    const byDate = recs.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+    const latest = byDate[byDate.length - 1];
+    txt += '　／　最新 ' + mendanDate(latest.date);
+    const next = latest.f['次回面談の予定日'];
+    if (next) txt += '　／　次回の予定 ' + mendanDate(next) + (next < ymdOf(new Date()) ? '（過ぎています）' : '');
+  }
+  sum.appendChild(document.createTextNode(txt));
+  listEl.appendChild(sum);
+
+  if (!recs.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'まだ面談記録はありません。「＋ 新しい面談記録を書く」から書けます。';
+    listEl.appendChild(p);
+    return;
+  }
+  recs.forEach(r => listEl.appendChild(mendanCard(r)));
+}
+
+function mendanCard(rec) {
+  const card = document.createElement('div');
+  card.className = 'card mendan-card';
+  card.dataset.id = rec.id;
+  const f = rec.f || {};
+
+  const top = document.createElement('div');
+  top.className = 'top';
+  const h = document.createElement('h3');
+  h.textContent = mendanDate(rec.date);
+  top.appendChild(h);
+  if (f['面談の種類']) {
+    const k = document.createElement('span');
+    k.className = 'kindtag';
+    k.textContent = f['面談の種類'];
+    top.appendChild(k);
+  }
+  card.appendChild(top);
+
+  const meta = [];
+  if (f['方法'])         meta.push(f['方法']);
+  if (f['面談した職員']) meta.push('面談: ' + f['面談した職員']);
+  if (f['同席者'])       meta.push('同席: ' + f['同席者']);
+  if (meta.length) {
+    const p = document.createElement('p');
+    p.className = 'meta';
+    p.textContent = meta.join('　／　');
+    card.appendChild(p);
+  }
+
+  const shown = ['面談の種類', '方法', '面談した職員', '同席者'];
+  const dl = document.createElement('dl');
+  function item(k, v) {
+    const row = document.createElement('div');
+    row.className = 'item';
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v;
+    row.appendChild(dt); row.appendChild(dd);
+    dl.appendChild(row);
+  }
+  MENDAN_FIELDS.forEach(fd => {
+    if (shown.indexOf(fd.key) >= 0 || !f[fd.key]) return;
+    item(fd.key, fd.type === 'date' ? mendanDate(f[fd.key]) : f[fd.key]);
+  });
+  // 項目の名前を変えたあとの古い列も、消さずに出しておく
+  Object.keys(f).forEach(k => {
+    if (!MENDAN_FIELDS.some(fd => fd.key === k)) item(k, f[k]);
+  });
+  if (dl.children.length) card.appendChild(dl);
+
+  const foot = document.createElement('div');
+  foot.className = 'foot';
+  const sp = document.createElement('span');
+  sp.className = 'sp';
+  sp.textContent = '記入: ' + (rec.by || '—')
+    + (rec.upd && rec.upd !== rec.by ? '　最終更新: ' + rec.upd : '')
+    + (rec.at ? '（' + rec.at + '）' : '');
+  foot.appendChild(sp);
+
+  const bEdit = document.createElement('button');
+  bEdit.type = 'button';
+  bEdit.className = 'btn-small';
+  bEdit.textContent = '直す';
+  bEdit.setAttribute('aria-label', mendanDate(rec.date) + ' の面談記録を直す');
+  bEdit.addEventListener('click', () => openMendanEditor(rec));
+  foot.appendChild(bEdit);
+
+  const bDel = document.createElement('button');
+  bDel.type = 'button';
+  bDel.className = 'btn-danger';
+  bDel.textContent = '消す';
+  bDel.setAttribute('aria-label', mendanDate(rec.date) + ' の面談記録を消す');
+  bDel.addEventListener('click', () => deleteMendan(rec, bDel));
+  foot.appendChild(bDel);
+
+  card.appendChild(foot);
+  return card;
+}
+
+/* --- 書く・直す ------------------------------------------------------- */
+function openMendanEditor(rec) {
+  if (mendanDirty() && !confirm('書きかけの面談記録があります。保存せずに閉じてよろしいですか？')) return;
+  const name = document.getElementById('userSelM').value;
+  if (!name) return;
+  clearError(mendanMsg);
+
+  mendanEdit = {
+    id:    rec ? rec.id : 'M' + Date.now() + Math.random().toString(36).slice(2, 6),
+    isNew: !rec,
+    name:  name,
+    snap:  ''
+  };
+  const val = fd => rec ? ((rec.f || {})[fd.key] || '') : (fd.staff ? staffName : '');
+
+  const ed = document.getElementById('mendanEditor');
+  ed.innerHTML = '';
+  const h = document.createElement('h3');
+  h.id = 'h-mendanEd';
+  h.textContent = (rec ? '面談記録を直す' : '新しい面談記録') + '　' + name + 'さん';
+  ed.appendChild(h);
+
+  function label(forId, text, required, hint) {
+    const l = document.createElement('label');
+    l.htmlFor = forId;
+    l.textContent = text;
+    if (required) {
+      const s = document.createElement('span'); s.className = 'req'; s.textContent = '必須';
+      l.appendChild(s);
+    }
+    if (hint) {
+      const s = document.createElement('span'); s.className = 'fhint'; s.textContent = hint;
+      l.appendChild(s);
+    }
+    return l;
+  }
+
+  // 1行で済む欄（日付・選ぶ・短い文）は横に並べ、複数行の欄は全幅にする
+  let grid = document.createElement('div');
+  grid.className = 'grid2';
+  ed.appendChild(grid);
+
+  const dWrap = document.createElement('div');
+  dWrap.appendChild(label('mdDate', '面談日', true));
+  const dIn = document.createElement('input');
+  dIn.type = 'date';
+  dIn.id = 'mdDate';
+  dIn.value = rec ? rec.date : ymdOf(new Date());
+  dWrap.appendChild(dIn);
+  grid.appendChild(dWrap);
+
+  MENDAN_FIELDS.forEach((fd, i) => {
+    const id = 'mdf' + i;
+    const wrap = document.createElement('div');
+    wrap.appendChild(label(id, fd.key, fd.required, fd.hint));
+    let el;
+    if (fd.type === 'select') {
+      el = document.createElement('select');
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = fd.required ? '選んでください' : '（なし）';
+      el.appendChild(blank);
+      const v = val(fd);
+      const opts = fd.options.slice();
+      if (v && opts.indexOf(v) < 0) opts.push(v);     // 選択肢から外した値も消さずに出す
+      opts.forEach(o => {
+        const op = document.createElement('option');
+        op.value = o; op.textContent = o;
+        el.appendChild(op);
+      });
+      el.value = v;
+    } else if (fd.type === 'area') {
+      el = document.createElement('textarea');
+      el.value = val(fd);
+      el.rows = 3;
+    } else {
+      el = document.createElement('input');
+      el.type = fd.type === 'date' ? 'date' : 'text';
+      el.value = val(fd);
+    }
+    el.id = id;
+    el.dataset.key = fd.key;
+    wrap.appendChild(el);
+
+    if (fd.type === 'area') {
+      ed.appendChild(wrap);
+      grid = null;
+    } else {
+      if (!grid) {
+        grid = document.createElement('div');
+        grid.className = 'grid2';
+        ed.appendChild(grid);
+      }
+      grid.appendChild(wrap);
+    }
+  });
+
+  const ops = document.createElement('div');
+  ops.className = 'ops';
+  const bSave = document.createElement('button');
+  bSave.type = 'button';
+  bSave.className = 'btn-main';
+  bSave.textContent = '保存する';
+  bSave.addEventListener('click', () => saveMendan(bSave));
+  const bCancel = document.createElement('button');
+  bCancel.type = 'button';
+  bCancel.className = 'btn-small';
+  bCancel.textContent = 'やめる';
+  bCancel.addEventListener('click', () => {
+    if (mendanDirty() && !confirm('書いた内容は保存されません。やめてよろしいですか？')) return;
+    closeMendanEditor();
+    document.getElementById('btnMendanNew').focus();
+  });
+  ops.appendChild(bSave);
+  ops.appendChild(bCancel);
+  ed.appendChild(ops);
+
+  ed.classList.remove('hidden');
+  mendanEdit.snap = mendanSnapshot();
+  ed.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  dIn.focus({ preventScroll: true });
+}
+
+function mendanCollect() {
+  const out = { date: '', f: {} };
+  const d = document.getElementById('mdDate');
+  if (d) out.date = d.value;
+  document.querySelectorAll('#mendanEditor [data-key]').forEach(el => {
+    out.f[el.dataset.key] = el.value.replace(/\r\n?/g, '\n').trim();
+  });
+  return out;
+}
+function mendanSnapshot() { return JSON.stringify(mendanCollect()); }
+
+function mendanDirty() {
+  if (!mendanEdit) return false;
+  if (document.getElementById('mendanEditor').classList.contains('hidden')) return false;
+  return mendanSnapshot() !== mendanEdit.snap;
+}
+
+function closeMendanEditor() {
+  mendanEdit = null;
+  const ed = document.getElementById('mendanEditor');
+  ed.classList.add('hidden');
+  ed.innerHTML = '';
+}
+
+async function saveMendan(btn) {
+  if (isBusy(btn) || !mendanEdit) return;
+  clearError(mendanMsg);
+  const data = mendanCollect();
+
+  if (!data.date) {
+    showError(mendanMsg, '面談日を入れてください。');
+    document.getElementById('mdDate').focus();
+    return;
+  }
+  const miss = MENDAN_FIELDS.filter(fd => fd.required && !data.f[fd.key])[0];
+  if (miss) {
+    showError(mendanMsg, '「' + miss.key + '」を選んでください。');
+    const el = document.querySelector('#mendanEditor [data-key="' + miss.key + '"]');
+    if (el) el.focus();
+    return;
+  }
+
+  setBusy(btn, '保存しています');
+  try {
+    /* ★新しい記録もIDを画面で決めてから送る。応答が届かずにやり直しても、
+         同じIDなので2件にならない（サーバーは同じIDの行を書き換える）。 */
+    const r = await callApiRetry({
+      action: 'staffMendan', op: 'save', token: token(),
+      record: { id: mendanEdit.id, name: mendanEdit.name, date: data.date, f: data.f }
+    }, 2, 'record');
+
+    if (r.ok) {
+      const recs = mendanData.records;
+      const i = recs.findIndex(x => x.id === r.record.id);
+      if (i >= 0) recs[i] = r.record; else recs.push(r.record);
+      closeMendanEditor();
+      renderMendan();
+      const card = document.querySelector('#mendanList .mendan-card[data-id="' + r.record.id + '"]');
+      if (card) { card.scrollIntoView({ block: 'center' }); card.querySelector('button').focus({ preventScroll: true }); }
+      showMendanInfo(r.record.name + 'さんの ' + mendanDate(r.record.date) + ' の面談記録を保存しました。');
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else if (r.error === 'too_long') {
+      showError(mendanMsg, '「' + (r.field || '') + '」が長すぎます（4000字まで）。');
+    } else if (r.error === 'unknown_action') {
+      showError(mendanMsg, 'サーバーがまだ面談記録に対応していません（Apps Script のデプロイが必要です）。');
+    } else {
+      showError(mendanMsg, '保存できませんでした（' + (r.error || '') + '）。もう一度「保存する」を押してください。');
+    }
+  } catch (e) {
+    showError(mendanMsg, '保存できたか確認できませんでした。もう一度「保存する」を押してください。二重に登録されることはありません。');
+  } finally {
+    if (document.body.contains(btn)) setIdle(btn, '保存する');
+  }
+}
+
+async function deleteMendan(rec, btn) {
+  if (isBusy(btn)) return;
+  if (!confirm(rec.name + 'さんの ' + mendanDate(rec.date) + ' の面談記録を消します。\n元に戻せません。よろしいですか？')) return;
+  clearError(mendanMsg);
+  setBusy(btn, '消しています');
+  try {
+    const r = await callApiRetry({ action: 'staffMendan', op: 'delete', token: token(), id: rec.id }, 2, 'id');
+    if (r.ok) {
+      mendanData.records = mendanData.records.filter(x => x.id !== rec.id);
+      if (mendanEdit && mendanEdit.id === rec.id) closeMendanEditor();
+      renderMendan();
+      document.getElementById('panel-mendan').focus({ preventScroll: true });
+      showMendanInfo(mendanDate(rec.date) + ' の面談記録を消しました。');
+    } else if (r.error === 'unauthorized') {
+      logout('ログインの有効期限が切れました。もう一度ログインしてください。');
+    } else {
+      showError(mendanMsg, '消せませんでした。もう一度お試しください。');
+    }
+  } catch (e) {
+    showError(mendanMsg, '通信に失敗しました。もう一度お試しください。');
+  } finally {
+    if (document.body.contains(btn)) setIdle(btn, '消す');
+  }
+}
+
+document.getElementById('userSelM').addEventListener('change', e => {
+  if (mendanDirty() && !confirm('書きかけの面談記録があります。保存せずに別の方へ切り替えますか？')) {
+    e.target.value = mendanUser;
+    return;
+  }
+  closeMendanEditor();
+  clearError(mendanMsg);
+  mendanUser = e.target.value;
+  renderMendan();
+});
+document.getElementById('mendanOrder').addEventListener('change', () => renderMendan());
+document.getElementById('btnMendanReload').addEventListener('click', () => loadMendan());
+document.getElementById('btnMendanNew').addEventListener('click', () => {
+  if (!mendanData) { showError(mendanMsg, 'まず「更新」を押して、面談記録を読み込んでください。'); return; }
+  openMendanEditor(null);
+});
+document.getElementById('btnMendanPrint').addEventListener('click', () => {
+  if (!mendanData) { showError(mendanMsg, 'まず「更新」を押して、面談記録を読み込んでください。'); return; }
+  printWith('print-mendan');
 });
 
 
